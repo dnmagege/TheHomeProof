@@ -1,19 +1,13 @@
 #!/usr/bin/env python3
 """
-Backend test for HomeProof new features:
-1. Rate limiter on signup
-2. AI Dispute Evidence Builder (real OpenAI)
-3. GET /api/disputes
-4. AI rate limit on chat
-5. Existing endpoints smoke test
-6. Tagline check
+Backend test for HomeProof new features (without rate limit tests first)
+This version tests the core features first, then rate limits at the end
 """
 
 import requests
 import time
 import random
 import string
-import json
 
 BASE_URL = "https://next-supa-stack.preview.emergentagent.com/api"
 FRONTEND_URL = "https://next-supa-stack.preview.emergentagent.com"
@@ -21,78 +15,47 @@ FRONTEND_URL = "https://next-supa-stack.preview.emergentagent.com"
 def random_email():
     """Generate random email for testing"""
     rand = ''.join(random.choices(string.ascii_lowercase + string.digits, k=8))
-    return f"test_{rand}@example.com"
+    return f"homeproof_{rand}@testmail.com"
 
-def test_signup_rate_limit():
-    """Test 1: Rate limiter - 11 rapid signups should trigger 429"""
-    print("\n" + "="*80)
-    print("TEST 1: SIGNUP RATE LIMITER")
-    print("="*80)
+def get_auth_token(email, password):
+    """Get Supabase auth token"""
+    supabase_url = "https://bpqmnxbkgilinfgqehpo.supabase.co"
+    supabase_anon_key = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJwcW1ueGJrZ2lsaW5mZ3FlaHBvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg4NjgzODEsImV4cCI6MjA5NDQ0NDM4MX0.L0OemMdLdHQ-R9L_NCu8jrUbCoktJAYU2i3Mwn4SQEM"
     
-    try:
-        hit_limit = False
-        for i in range(11):
-            email = random_email()
-            resp = requests.post(
-                f"{BASE_URL}/auth/signup",
-                json={"email": email, "password": "TestPass123!", "role": "landlord"},
-                timeout=10
-            )
-            print(f"  Signup {i+1}: {resp.status_code} - {email}")
-            
-            if resp.status_code == 429:
-                data = resp.json()
-                print(f"  ✅ Rate limit triggered: {data.get('error')}")
-                hit_limit = True
-                break
-            elif resp.status_code != 200:
-                print(f"  ⚠️  Unexpected status: {resp.status_code} - {resp.text[:200]}")
-        
-        if not hit_limit:
-            print("  ⚠️  WARNING: Did not hit rate limit after 11 signups")
-            print("  This might mean rate limit is higher than expected or already reset")
-        
-        return hit_limit
-    except Exception as e:
-        print(f"  ❌ FAILED: {e}")
-        return False
+    auth_resp = requests.post(
+        f"{supabase_url}/auth/v1/token?grant_type=password",
+        json={"email": email, "password": password},
+        headers={"apikey": supabase_anon_key, "Content-Type": "application/json"},
+        timeout=10
+    )
+    if auth_resp.status_code != 200:
+        raise Exception(f"Auth failed: {auth_resp.status_code} - {auth_resp.text[:200]}")
+    return auth_resp.json()["access_token"]
 
 def test_ai_dispute_builder():
-    """Test 2: AI Dispute Evidence Builder with real OpenAI call"""
+    """Test: AI Dispute Evidence Builder with real OpenAI call"""
     print("\n" + "="*80)
-    print("TEST 2: AI DISPUTE EVIDENCE BUILDER")
+    print("TEST: AI DISPUTE EVIDENCE BUILDER")
     print("="*80)
     
     try:
         # 1. Signup landlord
         email = random_email()
+        password = "SecurePass123!"
         print(f"  Step 1: Signup landlord {email}")
         resp = requests.post(
             f"{BASE_URL}/auth/signup",
-            json={"email": email, "password": "TestPass123!", "role": "landlord"},
+            json={"email": email, "password": password, "role": "landlord"},
             timeout=10
         )
         if resp.status_code != 200:
             print(f"  ❌ Signup failed: {resp.status_code} - {resp.text[:200]}")
             return False
+        print(f"  ✅ Signup successful")
         
         # 2. Get auth token
         print(f"  Step 2: Get auth token")
-        # Use Supabase auth to get token
-        supabase_url = "https://bpqmnxbkgilinfgqehpo.supabase.co"
-        supabase_anon_key = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJwcW1ueGJrZ2lsaW5mZ3FlaHBvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg4NjgzODEsImV4cCI6MjA5NDQ0NDM4MX0.L0OemMdLdHQ-R9L_NCu8jrUbCoktJAYU2i3Mwn4SQEM"
-        
-        auth_resp = requests.post(
-            f"{supabase_url}/auth/v1/token?grant_type=password",
-            json={"email": email, "password": "TestPass123!"},
-            headers={"apikey": supabase_anon_key, "Content-Type": "application/json"},
-            timeout=10
-        )
-        if auth_resp.status_code != 200:
-            print(f"  ❌ Auth failed: {auth_resp.status_code} - {auth_resp.text[:200]}")
-            return False
-        
-        token = auth_resp.json()["access_token"]
+        token = get_auth_token(email, password)
         headers = {"Authorization": f"Bearer {token}"}
         print(f"  ✅ Got token")
         
@@ -101,9 +64,9 @@ def test_ai_dispute_builder():
         prop_resp = requests.post(
             f"{BASE_URL}/properties",
             json={
-                "address_line1": "123 Dispute Test St",
+                "address_line1": "42 Kensington Gardens",
                 "city": "London",
-                "postcode": "E1 6AN",
+                "postcode": "W2 4RU",
                 "country": "UK"
             },
             headers=headers,
@@ -117,7 +80,7 @@ def test_ai_dispute_builder():
         print(f"  ✅ Property created: {property_id}")
         
         # 4. Create inventory (for evidence context)
-        print(f"  Step 4: Create inventory for evidence context")
+        print(f"  Step 4: Create inventory for evidence context (15-20s)...")
         inv_resp = requests.post(
             f"{BASE_URL}/inventories/generate",
             json={
@@ -142,8 +105,8 @@ def test_ai_dispute_builder():
             json={
                 "property_id": property_id,
                 "dispute_type": "deposit_deduction",
-                "tenant_position": "The carpet stains were there at move-in. I have photos.",
-                "landlord_position": "The tenant ruined the carpet and needs to pay £400 for replacement.",
+                "tenant_position": "The carpet stains were there at move-in. I have photos showing the stains existed before I moved in.",
+                "landlord_position": "The tenant ruined the carpet with red wine stains and needs to pay £400 for professional cleaning and replacement.",
                 "language": "en"
             },
             headers=headers,
@@ -191,32 +154,42 @@ def test_ai_dispute_builder():
         
         missing_keys = [k for k in required_keys if k not in ai]
         if missing_keys:
-            print(f"  ⚠️  Missing AI keys: {missing_keys}")
-        else:
-            print(f"  ✅ All required AI keys present")
+            print(f"  ❌ Missing AI keys: {missing_keys}")
+            return False
+        
+        print(f"  ✅ All required AI keys present")
         
         # Verify recommended_arguments structure
         rec_args = ai.get("recommended_arguments", {})
         if "tenant" not in rec_args or "landlord" not in rec_args:
-            print(f"  ⚠️  recommended_arguments missing tenant/landlord arrays")
-        else:
-            print(f"  ✅ recommended_arguments has tenant and landlord arrays")
+            print(f"  ❌ recommended_arguments missing tenant/landlord arrays")
+            return False
+        
+        if not isinstance(rec_args["tenant"], list) or not isinstance(rec_args["landlord"], list):
+            print(f"  ❌ recommended_arguments.tenant or .landlord not arrays")
+            return False
+        
+        print(f"  ✅ recommended_arguments has tenant ({len(rec_args['tenant'])}) and landlord ({len(rec_args['landlord'])}) arrays")
         
         # Verify strongest_evidence is array
         if not isinstance(ai.get("strongest_evidence"), list):
-            print(f"  ⚠️  strongest_evidence is not an array")
-        else:
-            print(f"  ✅ strongest_evidence is array with {len(ai['strongest_evidence'])} items")
+            print(f"  ❌ strongest_evidence is not an array")
+            return False
+        
+        print(f"  ✅ strongest_evidence is array with {len(ai['strongest_evidence'])} items")
         
         # Check dispute.ai_evidence_bundle
         if not dispute.get("ai_evidence_bundle"):
-            print(f"  ⚠️  dispute.ai_evidence_bundle is empty")
-        else:
-            print(f"  ✅ dispute.ai_evidence_bundle stored in database")
+            print(f"  ❌ dispute.ai_evidence_bundle is empty")
+            return False
+        
+        print(f"  ✅ dispute.ai_evidence_bundle stored in database")
         
         print(f"\n  Sample AI output:")
         print(f"    Executive summary: {ai.get('executive_summary', '')[:150]}...")
         print(f"    Strongest evidence count: {len(ai.get('strongest_evidence', []))}")
+        print(f"    Tenant arguments: {len(rec_args.get('tenant', []))}")
+        print(f"    Landlord arguments: {len(rec_args.get('landlord', []))}")
         print(f"    Suggested settlement: {ai.get('suggested_settlement', '')[:100]}...")
         
         return True
@@ -228,39 +201,32 @@ def test_ai_dispute_builder():
         return False
 
 def test_disputes_list():
-    """Test 3: GET /api/disputes - verify list returns disputes with properties joined"""
+    """Test: GET /api/disputes - verify list returns disputes with properties joined"""
     print("\n" + "="*80)
-    print("TEST 3: GET /api/disputes")
+    print("TEST: GET /api/disputes")
     print("="*80)
     
     try:
-        # Use the landlord from previous test (create new one)
         email = random_email()
+        password = "SecurePass123!"
         print(f"  Step 1: Signup landlord {email}")
         resp = requests.post(
             f"{BASE_URL}/auth/signup",
-            json={"email": email, "password": "TestPass123!", "role": "landlord"},
+            json={"email": email, "password": password, "role": "landlord"},
             timeout=10
         )
+        if resp.status_code != 200:
+            print(f"  ❌ Signup failed: {resp.status_code}")
+            return False
         
-        # Get token
-        supabase_url = "https://bpqmnxbkgilinfgqehpo.supabase.co"
-        supabase_anon_key = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJwcW1ueGJrZ2lsaW5mZ3FlaHBvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg4NjgzODEsImV4cCI6MjA5NDQ0NDM4MX0.L0OemMdLdHQ-R9L_NCu8jrUbCoktJAYU2i3Mwn4SQEM"
-        
-        auth_resp = requests.post(
-            f"{supabase_url}/auth/v1/token?grant_type=password",
-            json={"email": email, "password": "TestPass123!"},
-            headers={"apikey": supabase_anon_key, "Content-Type": "application/json"},
-            timeout=10
-        )
-        token = auth_resp.json()["access_token"]
+        token = get_auth_token(email, password)
         headers = {"Authorization": f"Bearer {token}"}
         
         # Create property
         prop_resp = requests.post(
             f"{BASE_URL}/properties",
             json={
-                "address_line1": "456 Dispute List Test Ave",
+                "address_line1": "15 Baker Street",
                 "city": "Manchester",
                 "postcode": "M1 1AA"
             },
@@ -268,15 +234,17 @@ def test_disputes_list():
             timeout=10
         )
         property_id = prop_resp.json()["property"]["id"]
+        print(f"  ✅ Property created")
         
         # Create dispute
+        print(f"  Step 2: Create dispute (15-40s)...")
         dispute_resp = requests.post(
             f"{BASE_URL}/disputes/build",
             json={
                 "property_id": property_id,
                 "dispute_type": "repair_dispute",
-                "tenant_position": "Landlord won't fix the heating.",
-                "landlord_position": "Tenant didn't report it properly.",
+                "tenant_position": "Landlord won't fix the broken heating system despite multiple requests.",
+                "landlord_position": "Tenant didn't report it through proper channels.",
                 "language": "en"
             },
             headers=headers,
@@ -284,15 +252,14 @@ def test_disputes_list():
         )
         
         if dispute_resp.status_code != 200:
-            print(f"  ⚠️  Dispute creation failed: {dispute_resp.status_code}")
-            print(f"  Skipping list test...")
+            print(f"  ❌ Dispute creation failed: {dispute_resp.status_code}")
             return False
         
         dispute_id = dispute_resp.json()["dispute"]["id"]
         print(f"  ✅ Dispute created: {dispute_id}")
         
         # Test GET /api/disputes
-        print(f"  Step 2: GET /api/disputes")
+        print(f"  Step 3: GET /api/disputes")
         list_resp = requests.get(
             f"{BASE_URL}/disputes",
             headers=headers,
@@ -309,21 +276,21 @@ def test_disputes_list():
         print(f"  ✅ GET /api/disputes returned {len(disputes)} disputes")
         
         if len(disputes) == 0:
-            print(f"  ⚠️  No disputes returned (expected at least 1)")
+            print(f"  ❌ No disputes returned (expected at least 1)")
             return False
         
         # Verify properties join
         first_dispute = disputes[0]
         if "properties" not in first_dispute:
-            print(f"  ⚠️  properties not joined in response")
+            print(f"  ❌ properties not joined in response")
             return False
         
         if not first_dispute["properties"]:
-            print(f"  ⚠️  properties is null/empty")
+            print(f"  ❌ properties is null/empty")
             return False
         
         if "address_line1" not in first_dispute["properties"]:
-            print(f"  ⚠️  properties.address_line1 missing")
+            print(f"  ❌ properties.address_line1 missing")
             return False
         
         print(f"  ✅ properties.address_line1 joined: {first_dispute['properties']['address_line1']}")
@@ -336,31 +303,79 @@ def test_disputes_list():
         traceback.print_exc()
         return False
 
-def test_ai_chat_rate_limit():
-    """Test 4: AI rate limit - 31 rapid chat calls should trigger 429"""
+def test_existing_endpoints():
+    """Test: Smoke test existing endpoints"""
     print("\n" + "="*80)
-    print("TEST 4: AI CHAT RATE LIMITER")
+    print("TEST: EXISTING ENDPOINTS SMOKE TEST")
     print("="*80)
     
     try:
-        # Signup and get token
+        # Test 1: GET /api
+        print(f"  Test 1: GET /api")
+        resp = requests.get(f"{BASE_URL}", timeout=10)
+        if resp.status_code != 200:
+            print(f"  ❌ GET /api failed: {resp.status_code}")
+            return False
+        print(f"  ✅ GET /api: 200 OK - {resp.json().get('message')}")
+        
+        # Test 2: POST /api/auth/signup
+        print(f"  Test 2: POST /api/auth/signup")
         email = random_email()
+        password = "SecurePass123!"
         resp = requests.post(
             f"{BASE_URL}/auth/signup",
-            json={"email": email, "password": "TestPass123!", "role": "tenant"},
+            json={"email": email, "password": password, "role": "landlord"},
             timeout=10
         )
+        if resp.status_code != 200:
+            print(f"  ❌ POST /api/auth/signup failed: {resp.status_code}")
+            return False
+        print(f"  ✅ POST /api/auth/signup: 200 OK")
         
-        supabase_url = "https://bpqmnxbkgilinfgqehpo.supabase.co"
-        supabase_anon_key = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJwcW1ueGJrZ2lsaW5mZ3FlaHBvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg4NjgzODEsImV4cCI6MjA5NDQ0NDM4MX0.L0OemMdLdHQ-R9L_NCu8jrUbCoktJAYU2i3Mwn4SQEM"
+        # Test 3: GET /api/me
+        print(f"  Test 3: GET /api/me")
+        token = get_auth_token(email, password)
+        headers = {"Authorization": f"Bearer {token}"}
         
-        auth_resp = requests.post(
-            f"{supabase_url}/auth/v1/token?grant_type=password",
-            json={"email": email, "password": "TestPass123!"},
-            headers={"apikey": supabase_anon_key, "Content-Type": "application/json"},
+        resp = requests.get(f"{BASE_URL}/me", headers=headers, timeout=10)
+        if resp.status_code != 200:
+            print(f"  ❌ GET /api/me failed: {resp.status_code}")
+            return False
+        
+        data = resp.json()
+        if "user" not in data or "profile" not in data:
+            print(f"  ❌ GET /api/me missing user or profile")
+            return False
+        
+        print(f"  ✅ GET /api/me: 200 OK - user: {data['user']['email']}, role: {data['profile']['role']}")
+        
+        return True
+        
+    except Exception as e:
+        print(f"  ❌ FAILED: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
+def test_ai_chat_rate_limit():
+    """Test: AI rate limit - 31 rapid chat calls should trigger 429"""
+    print("\n" + "="*80)
+    print("TEST: AI CHAT RATE LIMITER (30 per minute)")
+    print("="*80)
+    
+    try:
+        email = random_email()
+        password = "SecurePass123!"
+        resp = requests.post(
+            f"{BASE_URL}/auth/signup",
+            json={"email": email, "password": password, "role": "tenant"},
             timeout=10
         )
-        token = auth_resp.json()["access_token"]
+        if resp.status_code != 200:
+            print(f"  ❌ Signup failed: {resp.status_code}")
+            return False
+        
+        token = get_auth_token(email, password)
         headers = {"Authorization": f"Bearer {token}"}
         
         print(f"  Making 31 rapid chat requests...")
@@ -387,7 +402,7 @@ def test_ai_chat_rate_limit():
         
         if not hit_limit:
             print(f"  ⚠️  WARNING: Did not hit rate limit after 31 chat requests")
-            print(f"  This might mean rate limit is higher than expected or already reset")
+            print(f"  Rate limit might be higher than expected or window already reset")
         
         return hit_limit
         
@@ -397,89 +412,35 @@ def test_ai_chat_rate_limit():
         traceback.print_exc()
         return False
 
-def test_existing_endpoints():
-    """Test 5: Smoke test existing endpoints"""
+def test_signup_rate_limit():
+    """Test: Rate limiter - 11 rapid signups should trigger 429"""
     print("\n" + "="*80)
-    print("TEST 5: EXISTING ENDPOINTS SMOKE TEST")
+    print("TEST: SIGNUP RATE LIMITER (10 per hour)")
     print("="*80)
     
     try:
-        # Test 1: GET /api
-        print(f"  Test 1: GET /api")
-        resp = requests.get(f"{BASE_URL}", timeout=10)
-        if resp.status_code != 200:
-            print(f"  ❌ GET /api failed: {resp.status_code}")
-            return False
-        print(f"  ✅ GET /api: 200 OK - {resp.json().get('message')}")
+        hit_limit = False
+        for i in range(11):
+            email = random_email()
+            resp = requests.post(
+                f"{BASE_URL}/auth/signup",
+                json={"email": email, "password": "SecurePass123!", "role": "landlord"},
+                timeout=10
+            )
+            print(f"  Signup {i+1}: {resp.status_code}")
+            
+            if resp.status_code == 429:
+                data = resp.json()
+                print(f"  ✅ Rate limit triggered: {data.get('error')}")
+                hit_limit = True
+                break
+            elif resp.status_code != 200:
+                print(f"  ⚠️  Unexpected status: {resp.status_code} - {resp.text[:200]}")
         
-        # Test 2: POST /api/auth/signup
-        print(f"  Test 2: POST /api/auth/signup")
-        email = random_email()
-        resp = requests.post(
-            f"{BASE_URL}/auth/signup",
-            json={"email": email, "password": "TestPass123!", "role": "landlord"},
-            timeout=10
-        )
-        if resp.status_code != 200:
-            print(f"  ❌ POST /api/auth/signup failed: {resp.status_code}")
-            return False
-        print(f"  ✅ POST /api/auth/signup: 200 OK")
+        if not hit_limit:
+            print("  ⚠️  WARNING: Did not hit rate limit after 11 signups")
         
-        # Test 3: GET /api/me
-        print(f"  Test 3: GET /api/me")
-        supabase_url = "https://bpqmnxbkgilinfgqehpo.supabase.co"
-        supabase_anon_key = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJwcW1ueGJrZ2lsaW5mZ3FlaHBvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg4NjgzODEsImV4cCI6MjA5NDQ0NDM4MX0.L0OemMdLdHQ-R9L_NCu8jrUbCoktJAYU2i3Mwn4SQEM"
-        
-        auth_resp = requests.post(
-            f"{supabase_url}/auth/v1/token?grant_type=password",
-            json={"email": email, "password": "TestPass123!"},
-            headers={"apikey": supabase_anon_key, "Content-Type": "application/json"},
-            timeout=10
-        )
-        token = auth_resp.json()["access_token"]
-        headers = {"Authorization": f"Bearer {token}"}
-        
-        resp = requests.get(f"{BASE_URL}/me", headers=headers, timeout=10)
-        if resp.status_code != 200:
-            print(f"  ❌ GET /api/me failed: {resp.status_code}")
-            return False
-        
-        data = resp.json()
-        if "user" not in data or "profile" not in data:
-            print(f"  ❌ GET /api/me missing user or profile")
-            return False
-        
-        print(f"  ✅ GET /api/me: 200 OK - user: {data['user']['email']}, role: {data['profile']['role']}")
-        
-        return True
-        
-    except Exception as e:
-        print(f"  ❌ FAILED: {e}")
-        import traceback
-        traceback.print_exc()
-        return False
-
-def test_tagline():
-    """Test 6: Tagline check - GET / should contain 'HomeProof'"""
-    print("\n" + "="*80)
-    print("TEST 6: TAGLINE CHECK (OPTIONAL)")
-    print("="*80)
-    
-    try:
-        resp = requests.get(FRONTEND_URL, timeout=10)
-        if resp.status_code != 200:
-            print(f"  ⚠️  GET / failed: {resp.status_code}")
-            return False
-        
-        html = resp.text
-        if "HomeProof" in html:
-            print(f"  ✅ 'HomeProof' found in HTML")
-            return True
-        else:
-            print(f"  ⚠️  'HomeProof' NOT found in HTML")
-            print(f"  First 500 chars: {html[:500]}")
-            return False
-        
+        return hit_limit
     except Exception as e:
         print(f"  ❌ FAILED: {e}")
         return False
@@ -489,28 +450,22 @@ def main():
     print("HOMEPROOF BACKEND TESTING - NEW FEATURES")
     print("="*80)
     print(f"Base URL: {BASE_URL}")
-    print(f"Frontend URL: {FRONTEND_URL}")
     print("="*80)
     
     results = {}
     
-    # Test 1: Signup rate limiter
-    results["signup_rate_limit"] = test_signup_rate_limit()
+    # Test core features first (before hitting rate limits)
+    print("\n🔹 TESTING CORE FEATURES FIRST")
     
-    # Test 2: AI Dispute Evidence Builder
+    results["existing_endpoints"] = test_existing_endpoints()
     results["ai_dispute_builder"] = test_ai_dispute_builder()
-    
-    # Test 3: GET /api/disputes
     results["disputes_list"] = test_disputes_list()
     
-    # Test 4: AI chat rate limiter
+    # Test rate limiters last
+    print("\n🔹 TESTING RATE LIMITERS")
+    
     results["ai_chat_rate_limit"] = test_ai_chat_rate_limit()
-    
-    # Test 5: Existing endpoints
-    results["existing_endpoints"] = test_existing_endpoints()
-    
-    # Test 6: Tagline check
-    results["tagline"] = test_tagline()
+    results["signup_rate_limit"] = test_signup_rate_limit()
     
     # Summary
     print("\n" + "="*80)

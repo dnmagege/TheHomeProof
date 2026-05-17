@@ -89,7 +89,7 @@ export function SettingsDialog({ loc, onUpdate }) {
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={()=>setOpen(false)}>{t('cancel', loc.language)}</Button>
-          <Button onClick={save} className="bg-blue-600 hover:bg-blue-700">{t('save', loc.language)}</Button>
+          <Button onClick={save} className="bg-brand-500 hover:bg-brand-600">{t('save', loc.language)}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -281,7 +281,7 @@ export function AICoPilot({ loc, api }) {
             <div key={i} className={`flex gap-2 ${m.role === 'user' ? 'justify-end' : ''}`}>
               {m.role === 'assistant' && <div className="h-7 w-7 rounded-full bg-violet-100 text-violet-600 flex items-center justify-center flex-shrink-0"><Bot className="h-4 w-4"/></div>}
               <div className={`max-w-[75%] rounded-2xl px-4 py-2 text-sm whitespace-pre-wrap ${m.role === 'user' ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-900'}`}>{m.content}</div>
-              {m.role === 'user' && <div className="h-7 w-7 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center flex-shrink-0"><User className="h-4 w-4"/></div>}
+              {m.role === 'user' && <div className="h-7 w-7 rounded-full bg-blue-100 text-brand-600 flex items-center justify-center flex-shrink-0"><User className="h-4 w-4"/></div>}
             </div>
           ))}
           {loading && (
@@ -298,6 +298,124 @@ export function AICoPilot({ loc, api }) {
         </div>
       </CardContent>
     </Card>
+  );
+}
+
+// ---------------- AI DISPUTE EVIDENCE BUILDER ----------------
+export function AIDisputeBuilder({ properties, loc, api }) {
+  const [propertyId, setPropertyId] = useState('');
+  const [tenancies, setTenancies] = useState([]);
+  const [tenancyId, setTenancyId] = useState('');
+  const [disputeType, setDisputeType] = useState('deposit_deduction');
+  const [tenantPos, setTenantPos] = useState('');
+  const [landlordPos, setLandlordPos] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [result, setResult] = useState(null);
+
+  useEffect(() => {
+    (async () => {
+      if (!propertyId) { setTenancies([]); return; }
+      try { const r = await api(`properties/${propertyId}`); setTenancies(r.tenancies || []); } catch {}
+    })();
+  }, [propertyId, api]);
+
+  async function build() {
+    if (!propertyId || !disputeType) { toast.error('Property and dispute type required'); return; }
+    setLoading(true); setResult(null);
+    try {
+      toast.info('AI is reviewing all your evidence on file...');
+      const r = await api('disputes/build', { method: 'POST', body: JSON.stringify({ property_id: propertyId, tenancy_id: tenancyId || null, dispute_type: disputeType, tenant_position: tenantPos, landlord_position: landlordPos, language: loc.language }) });
+      setResult(r.ai);
+      toast.success('Evidence bundle ready');
+    } catch (e) { toast.error(e.message); } finally { setLoading(false); }
+  }
+
+  const lang = loc.language;
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2"><Sparkles className="h-5 w-5 text-rose-600"/>AI Dispute Evidence Builder</CardTitle>
+        <CardDescription>Pulls every inventory, inspection, issue, contract & compliance record we have for this property and builds a tribunal-ready evidence bundle.</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div>
+            <Label>Property</Label>
+            <Select value={propertyId} onValueChange={setPropertyId}>
+              <SelectTrigger><SelectValue placeholder="Select property"/></SelectTrigger>
+              <SelectContent>{properties.map(p => <SelectItem key={p.id} value={p.id}>{p.address_line1}</SelectItem>)}</SelectContent>
+            </Select>
+          </div>
+          <div>
+            <Label>Tenancy (optional)</Label>
+            <Select value={tenancyId} onValueChange={setTenancyId}>
+              <SelectTrigger><SelectValue placeholder="Select tenancy"/></SelectTrigger>
+              <SelectContent>{tenancies.map(t => <SelectItem key={t.id} value={t.id}>{t.tenant_email || 'tenancy'} · {t.start_date}</SelectItem>)}</SelectContent>
+            </Select>
+          </div>
+        </div>
+        <div>
+          <Label>Dispute type</Label>
+          <Select value={disputeType} onValueChange={setDisputeType}>
+            <SelectTrigger><SelectValue/></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="deposit_deduction">Deposit deduction</SelectItem>
+              <SelectItem value="repair_dispute">Repair / disrepair</SelectItem>
+              <SelectItem value="eviction_defense">Eviction defense</SelectItem>
+              <SelectItem value="rent_arrears">Rent arrears</SelectItem>
+              <SelectItem value="unfair_clause">Unfair contract clause</SelectItem>
+              <SelectItem value="breach_of_quiet_enjoyment">Breach of quiet enjoyment</SelectItem>
+              <SelectItem value="other">Other</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div><Label>Tenant position / claim</Label><Textarea rows={3} value={tenantPos} onChange={(e)=>setTenantPos(e.target.value)} placeholder="e.g. The landlord is withholding £400 for a stain that was there at move-in..."/></div>
+        <div><Label>Landlord position / claim</Label><Textarea rows={3} value={landlordPos} onChange={(e)=>setLandlordPos(e.target.value)} placeholder="e.g. The carpet damage was caused by tenant's pet, requires full replacement..."/></div>
+        <Button onClick={build} disabled={loading} className="w-full bg-rose-600 hover:bg-rose-700 text-white">
+          {loading ? <><Loader2 className="h-4 w-4 animate-spin mr-2"/>Building evidence bundle...</> : <><Sparkles className="h-4 w-4 mr-2"/>Build evidence bundle</>}
+        </Button>
+        {result && <DisputeResult data={result}/>}
+      </CardContent>
+    </Card>
+  );
+}
+
+function DisputeResult({ data }) {
+  return (
+    <div className="mt-4 space-y-4 border-t pt-4">
+      {data.executive_summary && <div className="p-4 rounded-lg bg-rose-50 border border-rose-200 text-sm text-rose-900"><strong>Executive Summary:</strong><br/>{data.executive_summary}</div>}
+      {data.strongest_evidence?.length > 0 && (
+        <div className="p-3 border rounded-lg">
+          <h4 className="font-semibold text-sm mb-2">⭐ Strongest evidence</h4>
+          <div className="space-y-2">{data.strongest_evidence.map((e, i) => (
+            <div key={i} className="text-sm flex gap-2"><Badge className={e.supports === 'tenant' ? 'bg-blue-100 text-blue-700' : e.supports === 'landlord' ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-700'}>{e.supports}</Badge><span><strong>{e.source}:</strong> {e.fact}</span></div>
+          ))}</div>
+        </div>
+      )}
+      {data.weaknesses?.length > 0 && (
+        <div className="p-3 border rounded-lg bg-orange-50">
+          <h4 className="font-semibold text-sm mb-2 text-orange-800">⚠ Weaknesses</h4>
+          <ul className="text-sm space-y-1">{data.weaknesses.map((w, i) => <li key={i}><Badge variant="outline" className="mr-1 capitalize">{w.party}</Badge>{w.weakness}</li>)}</ul>
+        </div>
+      )}
+      {data.missing_evidence?.length > 0 && (
+        <div className="p-3 border rounded-lg bg-yellow-50"><h4 className="font-semibold text-sm mb-2 text-yellow-800">📋 Missing evidence that would help</h4><ul className="text-sm list-disc pl-5">{data.missing_evidence.map((m, i) => <li key={i}>{m}</li>)}</ul></div>
+      )}
+      {data.recommended_arguments && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          {data.recommended_arguments.tenant?.length > 0 && <div className="p-3 border rounded-lg bg-blue-50"><h4 className="font-semibold text-sm mb-2 text-blue-800">Tenant arguments</h4><ul className="text-sm list-disc pl-5">{data.recommended_arguments.tenant.map((x, i) => <li key={i}>{x}</li>)}</ul></div>}
+          {data.recommended_arguments.landlord?.length > 0 && <div className="p-3 border rounded-lg bg-amber-50"><h4 className="font-semibold text-sm mb-2 text-amber-800">Landlord arguments</h4><ul className="text-sm list-disc pl-5">{data.recommended_arguments.landlord.map((x, i) => <li key={i}>{x}</li>)}</ul></div>}
+        </div>
+      )}
+      {data.suggested_settlement && <div className="p-3 rounded-lg bg-emerald-50 text-sm text-emerald-900"><strong>💡 Suggested settlement:</strong> {data.suggested_settlement}</div>}
+      {data.tribunal_or_court_advice && <div className="p-3 rounded-lg bg-purple-50 text-sm text-purple-900"><strong>⚖ Tribunal/court advice:</strong> {data.tribunal_or_court_advice}</div>}
+      {data.drafted_statement && (
+        <div className="p-3 border-2 border-slate-300 rounded-lg bg-white">
+          <h4 className="font-semibold text-sm mb-2">📝 Drafted formal statement</h4>
+          <pre className="text-sm text-slate-700 whitespace-pre-wrap font-sans">{data.drafted_statement}</pre>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -320,7 +438,7 @@ export function PrintInventoryButton({ data, propertyAddress }) {
       </style></head><body>
       <div class="header">
         <h1>Property Inventory Report</h1>
-        <div class="meta">${propertyAddress || ''} · Generated ${new Date().toLocaleDateString()} by TenantAI</div>
+        <div class="meta">${propertyAddress || ''} · Generated ${new Date().toLocaleDateString()} by HomeProof</div>
       </div>
       ${data.summary ? `<div class="summary"><strong>Summary:</strong> ${data.summary}</div>` : ''}
       ${(data.rooms || []).map(room => `
@@ -330,7 +448,7 @@ export function PrintInventoryButton({ data, propertyAddress }) {
         <table><thead><tr><th>Item</th><th>Qty</th><th>Condition</th><th>Notes</th></tr></thead>
         <tbody>${(room.items || []).map(it => `<tr><td>${it.item || ''}</td><td>${it.quantity || ''}</td><td><span class="condition">${it.condition || ''}</span></td><td>${it.notes || ''}</td></tr>`).join('')}</tbody></table>
       `).join('')}
-      <p style="margin-top:24px;font-size:10px;color:#94a3b8;text-align:center">Generated by TenantAI — AI-powered tenancy management</p>
+      <p style="margin-top:24px;font-size:10px;color:#94a3b8;text-align:center">Generated by HomeProof — AI-powered tenancy management</p>
       </body></html>`;
     const w = window.open('', '_blank');
     if (!w) { toast.error('Pop-up blocked'); return; }

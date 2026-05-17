@@ -18,6 +18,13 @@ module.exports = {
     	},
     	extend: {
     		colors: {
+    			brand: {
+    				DEFAULT: '#2ECC71',
+    				50: '#E8F8F0', 100: '#D1F2E1', 200: '#A8E6C3', 300: '#7FDAA5',
+    				400: '#56CE87', 500: '#2ECC71', 600: '#25A35B', 700: '#1C7A44',
+    				800: '#13522E', 900: '#0A2917'
+    			},
+    			ink: { DEFAULT: '#1A1A1A', 50: '#F5F5F5', 100: '#E5E5E5', 500: '#4A4A4A', 700: '#1A1A1A', 900: '#000000' },
     			border: 'hsl(var(--border))',
     			input: 'hsl(var(--input))',
     			ring: 'hsl(var(--ring))',

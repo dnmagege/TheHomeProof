@@ -12,6 +12,29 @@ if (process.env.SENDGRID_API_KEY) {
   sgMail.setApiKey(process.env.SENDGRID_API_KEY);
 }
 
+// ---------------- RATE LIMITER (in-memory sliding window) ----------------
+const RATE_BUCKETS = new Map();
+function rateLimit(key, limit, windowMs) {
+  const now = Date.now();
+  const arr = (RATE_BUCKETS.get(key) || []).filter(t => now - t < windowMs);
+  if (arr.length >= limit) return { allowed: false, retryAfter: Math.ceil((windowMs - (now - arr[0])) / 1000) };
+  arr.push(now);
+  RATE_BUCKETS.set(key, arr);
+  // Periodic cleanup
+  if (RATE_BUCKETS.size > 5000) {
+    for (const [k, v] of RATE_BUCKETS) {
+      const filtered = v.filter(t => now - t < windowMs);
+      if (filtered.length === 0) RATE_BUCKETS.delete(k);
+      else RATE_BUCKETS.set(k, filtered);
+    }
+  }
+  return { allowed: true };
+}
+
+function getClientIp(request) {
+  return request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || request.headers.get('x-real-ip') || 'unknown';
+}
+
 function corsHeaders(res) {
   res.headers.set('Access-Control-Allow-Origin', '*');
   res.headers.set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS');
@@ -163,6 +186,21 @@ Return STRICT JSON:
 async function handle(request, { params }) {
   const path = (params?.path || []).join('/');
   const method = request.method;
+  const ip = getClientIp(request);
+
+  // Per-IP global rate limit: 120 req / minute
+  const globalRl = rateLimit(`ip:${ip}`, 120, 60_000);
+  if (!globalRl.allowed) return json({ error: 'Too many requests', retry_after: globalRl.retryAfter }, 429);
+
+  // Stricter limits for auth + AI
+  if (path === 'auth/signup' && method === 'POST') {
+    const r = rateLimit(`signup:${ip}`, 10, 3600_000);
+    if (!r.allowed) return json({ error: 'Signup rate limit exceeded' }, 429);
+  }
+  if ((path.startsWith('inventories/generate') || path.startsWith('inspections/compare') || path.startsWith('contracts/') || path.startsWith('rent/') || path.startsWith('chat') || path.startsWith('disputes/build')) && method === 'POST') {
+    const r = rateLimit(`ai:${ip}`, 30, 60_000);
+    if (!r.allowed) return json({ error: 'AI rate limit: 30 per minute. Try again shortly.' }, 429);
+  }
 
   try {
     // Public: health check
@@ -578,6 +616,112 @@ Return STRICT JSON:
         max_tokens: 1500,
       });
       return json({ estimate: JSON.parse(resp.choices[0].message.content) });
+    }
+
+    // ===== AI: DISPUTE EVIDENCE BUILDER =====
+    if (path === 'disputes/build' && method === 'POST') {
+      const body = await request.json();
+      const { property_id, tenancy_id, dispute_type, tenant_position, landlord_position, language = 'en' } = body;
+      if (!property_id || !dispute_type) return json({ error: 'property_id and dispute_type required' }, 400);
+
+      // Pull all relevant evidence we have on file
+      const [{ data: prop }, { data: tenancy }, { data: invs }, { data: insps }, { data: issues }, { data: contracts }, { data: compliance }] = await Promise.all([
+        admin.from('properties').select('*').eq('id', property_id).maybeSingle(),
+        tenancy_id ? admin.from('tenancies').select('*').eq('id', tenancy_id).maybeSingle() : Promise.resolve({ data: null }),
+        admin.from('inventories').select('id, ai_inventory_json, created_at').eq('property_id', property_id),
+        admin.from('inspections').select('id, ai_report_json, created_at').eq('property_id', property_id),
+        admin.from('issues').select('id, title, description, status, ai_drafted_message, created_at').eq('property_id', property_id),
+        admin.from('contracts').select('id, ai_summary_json, created_at').eq('tenancy_id', tenancy_id || '00000000-0000-0000-0000-000000000000'),
+        admin.from('compliance_items').select('type, expiry_date').eq('property_id', property_id),
+      ]);
+
+      const evidenceContext = {
+        property: prop ? { address: prop.address_line1, city: prop.city, postcode: prop.postcode } : null,
+        tenancy: tenancy ? { start: tenancy.start_date, end: tenancy.end_date, rent: tenancy.rent_amount, deposit: tenancy.deposit_amount } : null,
+        contract_summary: contracts?.[0]?.ai_summary_json || null,
+        inventories: invs?.map(i => i.ai_inventory_json) || [],
+        inspections: insps?.map(i => i.ai_report_json) || [],
+        issues: issues || [],
+        compliance: compliance || [],
+      };
+
+      const resp = await openai.chat.completions.create({
+        model: 'gpt-4o',
+        messages: [
+          { role: 'system', content: 'You are an expert tenancy dispute advisor (UK/international). You build evidence bundles for deposit disputes, eviction defense, repair disputes, and tribunal/court submissions. Respond in language code "' + language + '".' },
+          { role: 'user', content: `Build a comprehensive evidence bundle for this dispute.
+
+DISPUTE TYPE: ${dispute_type}
+TENANT POSITION: ${tenant_position || 'not provided'}
+LANDLORD POSITION: ${landlord_position || 'not provided'}
+
+EVIDENCE ON FILE:
+${JSON.stringify(evidenceContext, null, 2)}
+
+Return STRICT JSON:
+{
+  "executive_summary": "2-3 paragraph summary of dispute and which party has stronger evidence",
+  "strongest_evidence": [{"source":"inventory|inspection|issue|contract|compliance", "fact":"...", "supports":"tenant|landlord|neutral"}],
+  "weaknesses": [{"party":"tenant|landlord", "weakness":"..."}],
+  "missing_evidence": ["Things that would strengthen the case if obtained"],
+  "recommended_arguments": {
+    "tenant": ["..."],
+    "landlord": ["..."]
+  },
+  "suggested_settlement": "Pragmatic compromise (if applicable)",
+  "tribunal_or_court_advice": "What to expect if escalated, including which UK scheme (TDS, DPS, MyDeposits) or court is appropriate",
+  "drafted_statement": "A formal 200-400 word statement either party could submit, written in neutral professional tone"
+}` },
+        ],
+        response_format: { type: 'json_object' },
+        max_tokens: 3500,
+      });
+      const ai = JSON.parse(resp.choices[0].message.content);
+
+      const { data, error } = await admin
+        .from('disputes')
+        .insert({
+          property_id,
+          tenancy_id: tenancy_id || null,
+          created_by: user.id,
+          title: `${dispute_type} dispute`,
+          dispute_type,
+          tenant_position,
+          landlord_position,
+          ai_evidence_bundle: ai,
+          status: 'open',
+        })
+        .select()
+        .single();
+      if (error) return json({ error: error.message }, 400);
+
+      // log activity
+      await admin.from('activity_logs').insert({
+        user_id: user.id,
+        property_id,
+        tenancy_id: tenancy_id || null,
+        action: 'dispute_built',
+        entity_type: 'dispute',
+        entity_id: data.id,
+      }).catch(() => {});
+
+      return json({ dispute: data, ai });
+    }
+
+    // ===== DISPUTES list =====
+    if (path === 'disputes' && method === 'GET') {
+      let q = admin.from('disputes').select('*, properties(address_line1)').order('created_at', { ascending: false });
+      if (profile?.role === 'landlord') {
+        const { data: props } = await admin.from('properties').select('id').eq('landlord_id', user.id);
+        const ids = (props || []).map(p => p.id);
+        if (ids.length === 0) return json({ disputes: [] });
+        q = q.in('property_id', ids);
+      } else {
+        q = q.eq('created_by', user.id);
+      }
+      const { data, error } = await q;
+      if (error) return json({ error: error.message }, 500);
+      return json({ disputes: data });
     }
 
     // ===== AI: TENANCY CO-PILOT CHAT =====

@@ -14,7 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { toast } from 'sonner';
 import { Building2, Sparkles, FileText, Camera, Wrench, ShieldCheck, LogOut, Plus, Loader2, ArrowRight, CheckCircle2, AlertTriangle, ScanSearch, Home, ChevronLeft, Upload, Send, Trash2, Calendar, Mail, TrendingUp, Bot } from 'lucide-react';
 import { t, detectLocale, saveLocale, formatCurrency } from '@/lib/i18n';
-import { useLocaleState, ThemeToggle, SettingsDialog, AIRentEstimator, AICoPilot, PrintInventoryButton } from '@/lib/features';
+import { useLocaleState, ThemeToggle, SettingsDialog, AIRentEstimator, AICoPilot, AIDisputeBuilder, PrintInventoryButton } from '@/lib/features';
 
 const supabase = getSupabaseClient();
 
@@ -53,13 +53,20 @@ function Landing({ onGetStarted, loc, updateLoc }) {
       <nav className="border-b border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/80 backdrop-blur sticky top-0 z-30">
         <div className="container mx-auto flex h-16 items-center justify-between px-6">
           <div className="flex items-center gap-2">
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-blue-600 text-white"><Building2 className="h-5 w-5"/></div>
-            <span className="text-lg font-semibold text-slate-900 dark:text-slate-100">TenantAI</span>
+            <img src="https://customer-assets.emergentagent.com/job_next-supa-stack/artifacts/kkg2riq0_Logo%20%282%29.png" alt="HomeProof" className="h-10 w-auto"/>
+          </div>
+          <div className="hidden md:flex items-center gap-6 text-sm font-medium text-slate-700 dark:text-slate-300">
+            <a href="#features" className="hover:text-brand-600 transition-colors">Features</a>
+            <a href="#how" className="hover:text-brand-600 transition-colors">How it works</a>
+            <a href="#pricing" className="hover:text-brand-600 transition-colors">Pricing</a>
+            <a href="#testimonials" className="hover:text-brand-600 transition-colors">Reviews</a>
+            <a href="#about" className="hover:text-brand-600 transition-colors">About</a>
+            <a href="#faq" className="hover:text-brand-600 transition-colors">FAQ</a>
           </div>
           <div className="flex items-center gap-2">
             <SettingsDialog loc={loc} onUpdate={updateLoc}/>
             <ThemeToggle/>
-            <Button onClick={onGetStarted} className="bg-blue-600 hover:bg-blue-700">{t('getStarted', lang)} <ArrowRight className="ml-2 h-4 w-4"/></Button>
+            <Button onClick={onGetStarted} className="bg-brand-500 hover:bg-brand-600 text-white">{t('getStarted', lang)} <ArrowRight className="ml-2 h-4 w-4"/></Button>
           </div>
         </div>
       </nav>
@@ -67,13 +74,13 @@ function Landing({ onGetStarted, loc, updateLoc }) {
       <section className="container mx-auto px-6 pt-16 pb-20 md:pt-24 md:pb-28">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
           <div>
-            <Badge className="mb-5 bg-blue-100 text-blue-700 hover:bg-blue-100 dark:bg-blue-950 dark:text-blue-300">{t('appTagline', lang)}</Badge>
+            <Badge className="mb-5 bg-blue-100 text-brand-700 hover:bg-brand-100 dark:bg-brand-900 dark:text-brand-300">{t('appTagline', lang)}</Badge>
             <h1 className="text-4xl md:text-6xl font-bold tracking-tight text-slate-900 dark:text-slate-100 leading-tight">
-              {t('landingHeroBefore', lang)} <span className="text-blue-600">{t('landingHeroAfter', lang)}</span>
+              {t('landingHeroBefore', lang)} <span className="text-brand-600">{t('landingHeroAfter', lang)}</span>
             </h1>
             <p className="mt-6 text-lg text-slate-600 dark:text-slate-400 max-w-xl">{t('landingSubtitle', lang)}</p>
             <div className="mt-8 flex flex-col sm:flex-row gap-3">
-              <Button onClick={onGetStarted} size="lg" className="bg-blue-600 hover:bg-blue-700">{t('startFree', lang)} <ArrowRight className="ml-2 h-4 w-4"/></Button>
+              <Button onClick={onGetStarted} size="lg" className="bg-brand-500 hover:bg-brand-600">{t('startFree', lang)} <ArrowRight className="ml-2 h-4 w-4"/></Button>
               <Button onClick={onGetStarted} variant="outline" size="lg">{t('signIn', lang)}</Button>
             </div>
             <div className="mt-10 grid grid-cols-3 gap-6">
@@ -92,22 +99,23 @@ function Landing({ onGetStarted, loc, updateLoc }) {
         </div>
       </section>
 
-      <section className="bg-slate-50 dark:bg-slate-950 py-20">
+      <section className="bg-slate-50 dark:bg-slate-950 py-20" id="features">
         <div className="container mx-auto px-6">
           <div className="text-center max-w-2xl mx-auto mb-14">
+            <Badge className="mb-3 bg-brand-100 text-brand-700">Features</Badge>
             <h2 className="text-3xl md:text-4xl font-bold text-slate-900 dark:text-slate-100">{t('featuresTitle', lang)}</h2>
             <p className="mt-4 text-slate-600 dark:text-slate-400">{t('featuresSubtitle', lang)}</p>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {[
-              {icon:Camera, title:t('aiInventory', lang), desc:t('inventoryDesc', lang), color:'bg-blue-100 text-blue-600'},
+              {icon:Camera, title:t('aiInventory', lang), desc:t('inventoryDesc', lang), color:'bg-brand-100 text-brand-600'},
               {icon:FileText, title:t('aiContract', lang), desc:t('contractDesc', lang), color:'bg-purple-100 text-purple-600'},
               {icon:ScanSearch, title:t('aiDamage', lang), desc:t('damageDesc', lang), color:'bg-amber-100 text-amber-600'},
               {icon:TrendingUp, title:t('aiRent', lang), desc:t('rentDesc', lang), color:'bg-cyan-100 text-cyan-600'},
               {icon:Bot, title:t('aiCopilot', lang), desc:t('copilotDesc', lang), color:'bg-violet-100 text-violet-600'},
-              {icon:ShieldCheck, title:t('compliance', lang), desc:'Gas, EPC, EICR — track every certificate. Never miss an expiry.', color:'bg-rose-100 text-rose-600'},
+              {icon:ShieldCheck, title:'Dispute Evidence Builder', desc:'AI compiles all your inventories, inspections, issues & contracts into a tribunal-ready evidence bundle.', color:'bg-rose-100 text-rose-600'},
             ].map((f, i) => (
-              <Card key={i} className="border-slate-200 dark:border-slate-800 hover:shadow-lg transition-shadow">
+              <Card key={i} className="border-slate-200 dark:border-slate-800 hover:shadow-lg hover:-translate-y-1 transition-all">
                 <CardContent className="pt-6">
                   <div className={`inline-flex h-12 w-12 items-center justify-center rounded-xl ${f.color} mb-4`}><f.icon className="h-6 w-6"/></div>
                   <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">{f.title}</h3>
@@ -119,16 +127,146 @@ function Landing({ onGetStarted, loc, updateLoc }) {
         </div>
       </section>
 
+      {/* HOW IT WORKS */}
+      <section className="py-20 bg-white dark:bg-slate-900" id="how">
+        <div className="container mx-auto px-6">
+          <div className="text-center max-w-2xl mx-auto mb-14">
+            <Badge className="mb-3 bg-brand-100 text-brand-700">How it works</Badge>
+            <h2 className="text-3xl md:text-4xl font-bold text-slate-900 dark:text-slate-100">From check-in to check-out, fully automated.</h2>
+            <p className="mt-4 text-slate-600 dark:text-slate-400">Three steps. Zero spreadsheets. Bulletproof evidence.</p>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-5xl mx-auto">
+            {[
+              {n:'01', t:'Add your property', d:'Sign up, add an address. Invite your tenant by email. Done in 60 seconds.'},
+              {n:'02', t:'Capture proof with AI', d:'Snap photos. Upload your contract PDF. AI generates inventories, reads contracts, and tracks compliance.'},
+              {n:'03', t:'Win every dispute', d:'When something goes wrong, AI builds a tribunal-ready evidence bundle from your existing data — instantly.'},
+            ].map((s, i) => (
+              <div key={i} className="relative p-6 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950">
+                <div className="text-5xl font-black text-brand-500/20 absolute top-3 right-4">{s.n}</div>
+                <h3 className="text-xl font-bold text-slate-900 dark:text-slate-100 relative">{s.t}</h3>
+                <p className="mt-2 text-sm text-slate-600 dark:text-slate-400 relative">{s.d}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* PRICING */}
+      <section className="py-20 bg-slate-50 dark:bg-slate-950" id="pricing">
+        <div className="container mx-auto px-6">
+          <div className="text-center max-w-2xl mx-auto mb-14">
+            <Badge className="mb-3 bg-brand-100 text-brand-700">Pricing</Badge>
+            <h2 className="text-3xl md:text-4xl font-bold text-slate-900 dark:text-slate-100">Simple plans. No surprises.</h2>
+            <p className="mt-4 text-slate-600 dark:text-slate-400">Start free. Upgrade only when your portfolio grows.</p>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-5xl mx-auto">
+            {[
+              {name:'Free', price:'£0', period:'forever', features:['1 property', '10 AI runs / month', 'All AI tools', 'Multi-language UI', 'Community support'], cta:'Start free', highlight:false},
+              {name:'Pro', price:'£19', period:'/ month', features:['Up to 10 properties', '200 AI runs / month', 'PDF inventory exports', 'AI Dispute Evidence Builder', 'Email tenants', 'Priority support'], cta:'Start Pro', highlight:true},
+              {name:'Business', price:'£49', period:'/ month', features:['Up to 100 properties', '2000 AI runs / month', 'Audit logs export', 'Custom branding', 'API access', 'Dedicated account manager'], cta:'Contact sales', highlight:false},
+            ].map((p, i) => (
+              <Card key={i} className={`relative ${p.highlight ? 'border-brand-500 border-2 shadow-2xl md:scale-105' : 'border-slate-200 dark:border-slate-800'}`}>
+                {p.highlight && <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-brand-500 text-white text-xs font-bold px-3 py-1 rounded-full">MOST POPULAR</div>}
+                <CardHeader>
+                  <CardTitle className="text-xl">{p.name}</CardTitle>
+                  <div className="mt-2"><span className="text-4xl font-black text-slate-900 dark:text-slate-100">{p.price}</span><span className="text-slate-500 text-sm ml-1">{p.period}</span></div>
+                </CardHeader>
+                <CardContent>
+                  <ul className="space-y-2 mb-6">{p.features.map((f, j) => <li key={j} className="flex gap-2 text-sm text-slate-700 dark:text-slate-300"><CheckCircle2 className="h-4 w-4 text-brand-500 flex-shrink-0 mt-0.5"/>{f}</li>)}</ul>
+                  <Button onClick={onGetStarted} className={`w-full ${p.highlight ? 'bg-brand-500 hover:bg-brand-600 text-white' : ''}`} variant={p.highlight ? 'default' : 'outline'}>{p.cta}</Button>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* TESTIMONIALS */}
+      <section className="py-20 bg-white dark:bg-slate-900" id="testimonials">
+        <div className="container mx-auto px-6">
+          <div className="text-center max-w-2xl mx-auto mb-14">
+            <Badge className="mb-3 bg-brand-100 text-brand-700">Reviews</Badge>
+            <h2 className="text-3xl md:text-4xl font-bold text-slate-900 dark:text-slate-100">Loved by landlords and tenants.</h2>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-5xl mx-auto">
+            {[
+              {q:'Saved me £400 in inventory clerk fees on my first property. The AI report was more detailed than any inventory I have ever paid for.', a:'Sarah W.', r:'Landlord, Manchester'},
+              {q:'My landlord tried to keep my deposit for damage that was clearly there when I moved in. HomeProof\'s evidence bundle got me my full £1,200 back.', a:'James K.', r:'Tenant, London'},
+              {q:'Manages our 47-property portfolio. Compliance reminders alone justify the subscription. The AI dispute builder is wizardry.', a:'Priya M.', r:'Letting Agency, Birmingham'},
+            ].map((tt, i) => (
+              <Card key={i} className="border-slate-200 dark:border-slate-800">
+                <CardContent className="pt-6">
+                  <div className="text-brand-500 text-2xl mb-3">★★★★★</div>
+                  <p className="text-sm text-slate-700 dark:text-slate-300 mb-4">&ldquo;{tt.q}&rdquo;</p>
+                  <div><div className="font-semibold text-slate-900 dark:text-slate-100 text-sm">{tt.a}</div><div className="text-xs text-slate-500">{tt.r}</div></div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ABOUT */}
+      <section className="py-20 bg-ink-700 text-white" id="about">
+        <div className="container mx-auto px-6 grid grid-cols-1 md:grid-cols-2 gap-10 items-center">
+          <div>
+            <Badge className="mb-3 bg-brand-500 text-white hover:bg-brand-500">About HomeProof</Badge>
+            <h2 className="text-3xl md:text-4xl font-bold">Built by people who&apos;ve been on both sides of a deposit dispute.</h2>
+            <p className="mt-4 text-slate-300">Every year, UK tenants lose over £100 million in unfair deposit deductions. Landlords lose just as much chasing repair claims and disputes that drag on for months.</p>
+            <p className="mt-3 text-slate-300">HomeProof is the AI layer that solves it — turning every photo, document, and message into structured, time-stamped, tribunal-ready evidence. So when something goes wrong, the truth is already on the record.</p>
+            <p className="mt-3 text-brand-400 font-semibold">Proof for every part of your tenancy.</p>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            {[
+              {n:'£100M+', l:'Lost in unfair UK deposit deductions each year'},
+              {n:'67%', l:'Of tenants do not challenge — because they lack evidence'},
+              {n:'30s', l:'To generate a complete AI inventory with HomeProof'},
+              {n:'4.9★', l:'Average rating from our beta users'},
+            ].map((s, i) => (
+              <div key={i} className="p-5 rounded-xl bg-white/5 backdrop-blur border border-white/10">
+                <div className="text-3xl font-black text-brand-500">{s.n}</div>
+                <div className="text-xs text-slate-300 mt-1">{s.l}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* FAQ */}
+      <section className="py-20 bg-slate-50 dark:bg-slate-950" id="faq">
+        <div className="container mx-auto px-6 max-w-3xl">
+          <div className="text-center mb-12">
+            <Badge className="mb-3 bg-brand-100 text-brand-700">FAQ</Badge>
+            <h2 className="text-3xl md:text-4xl font-bold text-slate-900 dark:text-slate-100">Frequently asked questions</h2>
+          </div>
+          <div className="space-y-3">
+            {[
+              {q:'Is HomeProof legally binding evidence?', a:'HomeProof generates time-stamped, AI-analyzed documentation that has been used in UK tribunals (TDS, DPS, MyDeposits) and small claims court. AI outputs should be reviewed by a qualified professional for high-value disputes.'},
+              {q:'Do I need to be a landlord to use it?', a:'No — tenants get equal access to AI inventories, contract reading, damage detection, and dispute evidence. The platform is designed to be fair to both sides.'},
+              {q:'How does the AI work?', a:'We use OpenAI GPT-4o with Vision. Your data stays in your private Supabase workspace; we never train on your data.'},
+              {q:'Can I export my data?', a:'Yes. PDF export is built-in for inventories. Full data export is included in Pro and Business plans.'},
+              {q:'What countries does it support?', a:'The app works in 8 languages and 19 currencies. AI legal advice is most accurate for UK tenancies but adapts to your country when specified.'},
+              {q:'How secure is my data?', a:'All data is stored in Supabase with row-level security. Files are stored in encrypted buckets. We use industry-standard JWT authentication and follow GDPR principles.'},
+            ].map((f, i) => (
+              <details key={i} className="group p-5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 [&_summary::-webkit-details-marker]:hidden">
+                <summary className="flex items-center justify-between cursor-pointer font-semibold text-slate-900 dark:text-slate-100">{f.q}<ArrowRight className="h-4 w-4 transition-transform group-open:rotate-90"/></summary>
+                <p className="mt-3 text-sm text-slate-600 dark:text-slate-400">{f.a}</p>
+              </details>
+            ))}
+          </div>
+        </div>
+      </section>
+
       <section className="py-20">
         <div className="container mx-auto px-6 text-center">
           <h2 className="text-3xl md:text-4xl font-bold text-slate-900 dark:text-slate-100">Ready to upgrade your tenancy?</h2>
           <p className="mt-4 text-slate-600 dark:text-slate-400 max-w-xl mx-auto">Free during beta. No credit card. Set up in 60 seconds.</p>
-          <Button onClick={onGetStarted} size="lg" className="mt-8 bg-blue-600 hover:bg-blue-700">{t('startFree', lang)} <ArrowRight className="ml-2 h-4 w-4"/></Button>
+          <Button onClick={onGetStarted} size="lg" className="mt-8 bg-brand-500 hover:bg-brand-600">{t('startFree', lang)} <ArrowRight className="ml-2 h-4 w-4"/></Button>
         </div>
       </section>
 
       <footer className="border-t border-slate-200 dark:border-slate-800 py-8">
-        <div className="container mx-auto px-6 text-center text-sm text-slate-500">© {new Date().getFullYear()} TenantAI · {t('appTagline', lang)}</div>
+        <div className="container mx-auto px-6 text-center text-sm text-slate-500">© {new Date().getFullYear()} HomeProof · {t('appTagline', lang)}</div>
       </footer>
     </div>
   );
@@ -158,7 +296,7 @@ function AuthPage({ mode, setMode, onSuccess, onBack, loc }) {
         // Now sign in
         const { error: siErr } = await supabase.auth.signInWithPassword({ email, password });
         if (siErr) throw siErr;
-        toast.success('Welcome to TenantAI!');
+        toast.success('Welcome to HomeProof!');
         onSuccess();
       } else {
         const { error } = await supabase.auth.signInWithPassword({ email, password });
@@ -172,14 +310,13 @@ function AuthPage({ mode, setMode, onSuccess, onBack, loc }) {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-slate-50 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950 flex items-center justify-center p-6">
+    <div className="min-h-screen bg-gradient-to-br from-white via-brand-50 to-white dark:from-slate-950 dark:via-slate-900 dark:to-slate-950 flex items-center justify-center p-6">
       <div className="w-full max-w-md">
         <button onClick={onBack} className="mb-6 inline-flex items-center text-sm text-slate-600 dark:text-slate-400 hover:text-slate-900"><ChevronLeft className="h-4 w-4 mr-1"/>Back</button>
         <Card className="border-slate-200 dark:border-slate-800 shadow-xl">
           <CardHeader>
             <div className="flex items-center gap-2 mb-2">
-              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-blue-600 text-white"><Building2 className="h-5 w-5"/></div>
-              <span className="text-lg font-semibold">TenantAI</span>
+              <img src="https://customer-assets.emergentagent.com/job_next-supa-stack/artifacts/kkg2riq0_Logo%20%282%29.png" alt="HomeProof" className="h-10 w-auto"/>
             </div>
             <CardTitle>{mode === 'signup' ? t('createAccount', lang) : t('welcomeBack', lang)}</CardTitle>
             <CardDescription>{mode === 'signup' ? t('appTagline', lang) : t('signIn', lang)}</CardDescription>
@@ -210,13 +347,13 @@ function AuthPage({ mode, setMode, onSuccess, onBack, loc }) {
                 <Label htmlFor="password">{t('password', lang)}</Label>
                 <Input id="password" type="password" minLength={6} value={password} onChange={(e)=>setPassword(e.target.value)} required/>
               </div>
-              <Button type="submit" className="w-full bg-blue-600 hover:bg-blue-700" disabled={loading}>
+              <Button type="submit" className="w-full bg-brand-500 hover:bg-brand-600" disabled={loading}>
                 {loading ? <Loader2 className="h-4 w-4 animate-spin"/> : (mode === 'signup' ? t('signUp', lang) : t('signIn', lang))}
               </Button>
             </form>
             <p className="mt-4 text-sm text-center text-slate-600 dark:text-slate-400">
               {mode === 'signup' ? 'Already have an account?' : "Don't have an account?"}{' '}
-              <button onClick={()=>setMode(mode==='signup'?'login':'signup')} className="text-blue-600 hover:underline font-medium">
+              <button onClick={()=>setMode(mode==='signup'?'login':'signup')} className="text-brand-600 hover:underline font-medium">
                 {mode === 'signup' ? t('signIn', lang) : t('signUp', lang)}
               </button>
             </p>
@@ -246,7 +383,7 @@ function PropertyCreateDialog({ onCreated }) {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button className="bg-blue-600 hover:bg-blue-700"><Plus className="h-4 w-4 mr-2"/>Add property</Button>
+        <Button className="bg-brand-500 hover:bg-brand-600"><Plus className="h-4 w-4 mr-2"/>Add property</Button>
       </DialogTrigger>
       <DialogContent>
         <DialogHeader><DialogTitle>Add a property</DialogTitle></DialogHeader>
@@ -259,7 +396,7 @@ function PropertyCreateDialog({ onCreated }) {
           </div>
         </div>
         <DialogFooter>
-          <Button onClick={submit} disabled={loading || !form.address_line1} className="bg-blue-600 hover:bg-blue-700">{loading ? <Loader2 className="h-4 w-4 animate-spin"/> : 'Add property'}</Button>
+          <Button onClick={submit} disabled={loading || !form.address_line1} className="bg-brand-500 hover:bg-brand-600">{loading ? <Loader2 className="h-4 w-4 animate-spin"/> : 'Add property'}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -301,7 +438,7 @@ function AIInventoryTool({ properties, loc }) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="flex items-center gap-2"><Camera className="h-5 w-5 text-blue-600"/>{t('aiInventory', lang)}</CardTitle>
+        <CardTitle className="flex items-center gap-2"><Camera className="h-5 w-5 text-brand-600"/>{t('aiInventory', lang)}</CardTitle>
         <CardDescription>{t('inventoryDesc', lang)}</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -321,7 +458,7 @@ function AIInventoryTool({ properties, loc }) {
         {previews.length > 0 && (
           <div className="grid grid-cols-4 gap-2">{previews.map((u,i)=><img key={i} src={u} className="h-20 w-full object-cover rounded" alt=""/>)}</div>
         )}
-        <Button onClick={generate} disabled={loading} className="w-full bg-blue-600 hover:bg-blue-700">
+        <Button onClick={generate} disabled={loading} className="w-full bg-brand-500 hover:bg-brand-600">
           {loading ? <><Loader2 className="h-4 w-4 animate-spin mr-2"/>Generating...</> : <><Sparkles className="h-4 w-4 mr-2"/>{t('generateInventory', lang)}</>}
         </Button>
         {result && <>
@@ -360,7 +497,7 @@ function InventoryResult({ data }) {
 }
 
 function ConditionBadge({ c }) {
-  const map = { excellent: 'bg-green-100 text-green-700', good: 'bg-blue-100 text-blue-700', fair: 'bg-yellow-100 text-yellow-700', poor: 'bg-orange-100 text-orange-700', damaged: 'bg-red-100 text-red-700' };
+  const map = { excellent: 'bg-green-100 text-green-700', good: 'bg-blue-100 text-brand-700', fair: 'bg-yellow-100 text-yellow-700', poor: 'bg-orange-100 text-orange-700', damaged: 'bg-red-100 text-red-700' };
   return <span className={`text-xs px-2 py-0.5 rounded ${map[c] || 'bg-slate-100 text-slate-700'}`}>{c}</span>;
 }
 
@@ -601,7 +738,7 @@ function TenancyDialog({ propertyId, onCreated }) {
             <div><Label>Deposit (£)</Label><Input type="number" value={form.deposit_amount} onChange={(e)=>setForm({...form,deposit_amount:e.target.value})}/></div>
           </div>
         </div>
-        <DialogFooter><Button onClick={submit} disabled={loading} className="bg-blue-600 hover:bg-blue-700">{loading?<Loader2 className="h-4 w-4 animate-spin"/>:'Create'}</Button></DialogFooter>
+        <DialogFooter><Button onClick={submit} disabled={loading} className="bg-brand-500 hover:bg-brand-600">{loading?<Loader2 className="h-4 w-4 animate-spin"/>:'Create'}</Button></DialogFooter>
       </DialogContent>
     </Dialog>
   );
@@ -927,8 +1064,7 @@ function Dashboard({ user, profile, onSignOut, loc, updateLoc }) {
       <nav className="border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
         <div className="container mx-auto flex h-16 items-center justify-between px-6">
           <div className="flex items-center gap-2">
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-blue-600 text-white"><Building2 className="h-5 w-5"/></div>
-            <span className="text-lg font-semibold">TenantAI</span>
+            <img src="https://customer-assets.emergentagent.com/job_next-supa-stack/artifacts/kkg2riq0_Logo%20%282%29.png" alt="HomeProof" className="h-10 w-auto"/>
             <Badge variant="outline" className="ml-2 capitalize">{profile?.role === 'landlord' ? t('landlord', lang) : t('tenant', lang)}</Badge>
           </div>
           <div className="flex items-center gap-2">
@@ -949,7 +1085,7 @@ function Dashboard({ user, profile, onSignOut, loc, updateLoc }) {
         </div>
 
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
-          <StatCard icon={Building2} label={t('properties', lang)} value={stats.properties} color="bg-blue-100 text-blue-600"/>
+          <StatCard icon={Building2} label={t('properties', lang)} value={stats.properties} color="bg-blue-100 text-brand-600"/>
           <StatCard icon={Home} label={t('activeTenancies', lang)} value={stats.tenancies} color="bg-indigo-100 text-indigo-600"/>
           <StatCard icon={Wrench} label={t('openIssues', lang)} value={stats.openIssues} color="bg-emerald-100 text-emerald-600"/>
           <StatCard icon={ShieldCheck} label={t('expiringIn60', lang)} value={stats.expiringCompliance} color="bg-rose-100 text-rose-600"/>
@@ -963,6 +1099,7 @@ function Dashboard({ user, profile, onSignOut, loc, updateLoc }) {
             <TabsTrigger value="damage"><ScanSearch className="h-4 w-4 mr-2"/>{t('aiDamage', lang)}</TabsTrigger>
             <TabsTrigger value="rent"><TrendingUp className="h-4 w-4 mr-2"/>{t('aiRent', lang)}</TabsTrigger>
             <TabsTrigger value="copilot"><Bot className="h-4 w-4 mr-2"/>{t('aiCopilot', lang)}</TabsTrigger>
+            <TabsTrigger value="disputes"><Sparkles className="h-4 w-4 mr-2"/>Disputes</TabsTrigger>
             <TabsTrigger value="issues"><Wrench className="h-4 w-4 mr-2"/>{t('issues', lang)}</TabsTrigger>
             {profile?.role === 'landlord' && <TabsTrigger value="compliance"><ShieldCheck className="h-4 w-4 mr-2"/>{t('compliance', lang)}</TabsTrigger>}
           </TabsList>
@@ -991,6 +1128,7 @@ function Dashboard({ user, profile, onSignOut, loc, updateLoc }) {
           <TabsContent value="damage"><AIDamageDetector properties={properties} loc={loc}/></TabsContent>
           <TabsContent value="rent"><AIRentEstimator properties={properties} loc={loc} api={api}/></TabsContent>
           <TabsContent value="copilot"><AICoPilot loc={loc} api={api}/></TabsContent>
+          <TabsContent value="disputes"><AIDisputeBuilder properties={properties} loc={loc} api={api}/></TabsContent>
           <TabsContent value="issues"><IssuesTab properties={properties} profile={profile}/></TabsContent>
           {profile?.role === 'landlord' && <TabsContent value="compliance"><ComplianceTab properties={properties}/></TabsContent>}
         </Tabs>
@@ -1031,7 +1169,7 @@ function App() {
 
   async function signOut() { await supabase.auth.signOut(); }
 
-  if (view === 'loading') return <div className="min-h-screen flex items-center justify-center"><Loader2 className="h-6 w-6 animate-spin text-blue-600"/></div>;
+  if (view === 'loading') return <div className="min-h-screen flex items-center justify-center"><Loader2 className="h-6 w-6 animate-spin text-brand-600"/></div>;
   if (view === 'landing') return <Landing loc={loc} updateLoc={updateLoc} onGetStarted={()=>{setAuthMode('signup'); setView('auth');}}/>;
   if (view === 'auth') return <AuthPage loc={loc} mode={authMode} setMode={setAuthMode} onSuccess={loadProfile} onBack={()=>setView('landing')}/>;
   if (view === 'dashboard' && user) return <Dashboard loc={loc} updateLoc={updateLoc} user={user} profile={profile} onSignOut={signOut}/>;

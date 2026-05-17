@@ -3,8 +3,11 @@ import { Toaster } from '@/components/ui/sonner'
 import { ThemeProvider } from '@/components/theme-provider'
 
 export const metadata = {
-  title: 'TenantAI — AI Tenancy Management',
-  description: 'AI-powered inventories, contract reading, damage detection, and compliance for landlords & tenants.',
+  title: 'HomeProof — Proof for every part of your tenancy',
+  description: 'AI-powered tenancy management: inventories, contract reading, damage detection, dispute evidence, and compliance for landlords & tenants worldwide.',
+  icons: {
+    icon: 'https://customer-assets.emergentagent.com/job_next-supa-stack/artifacts/kkg2riq0_Logo%20%282%29.png',
+  },
 }
 
 export default function RootLayout({ children }) {
