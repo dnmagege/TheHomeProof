@@ -12,7 +12,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
-import { Building2, Sparkles, FileText, Camera, Wrench, ShieldCheck, LogOut, Plus, Loader2, ArrowRight, CheckCircle2, AlertTriangle, ScanSearch, Home, ChevronLeft, Upload } from 'lucide-react';
+import { Building2, Sparkles, FileText, Camera, Wrench, ShieldCheck, LogOut, Plus, Loader2, ArrowRight, CheckCircle2, AlertTriangle, ScanSearch, Home, ChevronLeft, Upload, Send, Trash2, Calendar, Mail } from 'lucide-react';
 
 const supabase = getSupabaseClient();
 
@@ -625,14 +625,291 @@ function PropertyCard({ property, onChanged }) {
   );
 }
 
-function Dashboard({ user, profile, onSignOut }) {
-  const [properties, setProperties] = useState([]);
+function ComplianceTab({ properties }) {
+  const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
-  const loadProps = useCallback(async () => {
-    try { const r = await api('properties'); setProperties(r.properties || []); } catch(e){ toast.error(e.message); }
+  const [open, setOpen] = useState(false);
+  const [form, setForm] = useState({ property_id: '', type: 'Gas Safety Certificate', expiry_date: '' });
+  const [saving, setSaving] = useState(false);
+
+  const load = useCallback(async () => {
+    try { const r = await api('compliance'); setItems(r.compliance || []); } catch (e) { toast.error(e.message); }
     setLoading(false);
   }, []);
-  useEffect(() => { loadProps(); }, [loadProps]);
+  useEffect(() => { load(); }, [load]);
+
+  async function add() {
+    if (!form.property_id || !form.expiry_date) { toast.error('Property and expiry date required'); return; }
+    setSaving(true);
+    try {
+      await api('compliance', { method: 'POST', body: JSON.stringify(form) });
+      toast.success('Compliance item added');
+      setOpen(false); setForm({ property_id: '', type: 'Gas Safety Certificate', expiry_date: '' });
+      load();
+    } catch (e) { toast.error(e.message); } finally { setSaving(false); }
+  }
+
+  async function remove(id) {
+    try { await api(`compliance/${id}`, { method: 'DELETE' }); toast.success('Removed'); load(); }
+    catch (e) { toast.error(e.message); }
+  }
+
+  function daysUntil(d) {
+    if (!d) return null;
+    const diff = Math.ceil((new Date(d) - new Date()) / (1000 * 60 * 60 * 24));
+    return diff;
+  }
+  function urgency(days) {
+    if (days == null) return 'bg-slate-100 text-slate-700';
+    if (days < 0) return 'bg-red-100 text-red-700';
+    if (days < 30) return 'bg-orange-100 text-orange-700';
+    if (days < 90) return 'bg-yellow-100 text-yellow-700';
+    return 'bg-green-100 text-green-700';
+  }
+
+  return (
+    <Card>
+      <CardHeader className="flex flex-row items-center justify-between">
+        <div>
+          <CardTitle className="flex items-center gap-2"><ShieldCheck className="h-5 w-5 text-rose-600"/>Compliance Tracker</CardTitle>
+          <CardDescription>Gas, EPC, EICR, deposit protection — never miss an expiry.</CardDescription>
+        </div>
+        <Dialog open={open} onOpenChange={setOpen}>
+          <DialogTrigger asChild><Button className="bg-rose-600 hover:bg-rose-700"><Plus className="h-4 w-4 mr-2"/>Add item</Button></DialogTrigger>
+          <DialogContent>
+            <DialogHeader><DialogTitle>Add compliance item</DialogTitle></DialogHeader>
+            <div className="space-y-3">
+              <div>
+                <Label>Property</Label>
+                <Select value={form.property_id} onValueChange={(v)=>setForm({...form,property_id:v})}>
+                  <SelectTrigger><SelectValue placeholder="Select property"/></SelectTrigger>
+                  <SelectContent>{properties.map(p=><SelectItem key={p.id} value={p.id}>{p.address_line1}</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>Type</Label>
+                <Select value={form.type} onValueChange={(v)=>setForm({...form,type:v})}>
+                  <SelectTrigger><SelectValue/></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Gas Safety Certificate">Gas Safety Certificate (CP12)</SelectItem>
+                    <SelectItem value="EPC">Energy Performance Certificate (EPC)</SelectItem>
+                    <SelectItem value="EICR">Electrical Installation (EICR)</SelectItem>
+                    <SelectItem value="PAT Testing">PAT Testing</SelectItem>
+                    <SelectItem value="Deposit Protection">Deposit Protection</SelectItem>
+                    <SelectItem value="Landlord Insurance">Landlord Insurance</SelectItem>
+                    <SelectItem value="Selective Licensing">Selective Licensing</SelectItem>
+                    <SelectItem value="Other">Other</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div><Label>Expiry date</Label><Input type="date" value={form.expiry_date} onChange={(e)=>setForm({...form,expiry_date:e.target.value})}/></div>
+            </div>
+            <DialogFooter><Button onClick={add} disabled={saving} className="bg-rose-600 hover:bg-rose-700">{saving?<Loader2 className="h-4 w-4 animate-spin"/>:'Add'}</Button></DialogFooter>
+          </DialogContent>
+        </Dialog>
+      </CardHeader>
+      <CardContent>
+        {loading ? <div className="flex items-center justify-center py-8 text-slate-500"><Loader2 className="h-5 w-5 animate-spin mr-2"/>Loading...</div>
+          : items.length === 0 ? <div className="text-center py-8 text-slate-500"><Calendar className="h-12 w-12 mx-auto mb-2 text-slate-300"/>No compliance items yet.</div>
+          : <div className="space-y-2">{items.map(it => {
+              const d = daysUntil(it.expiry_date);
+              return (
+                <div key={it.id} className="flex items-center justify-between p-3 border rounded-lg">
+                  <div>
+                    <div className="font-medium text-slate-900">{it.type}</div>
+                    <div className="text-xs text-slate-500">{it.properties?.address_line1} {it.properties?.postcode && `· ${it.properties.postcode}`}</div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <div className="text-right">
+                      <div className="text-sm text-slate-600">{it.expiry_date}</div>
+                      <Badge className={urgency(d)}>{d != null ? (d < 0 ? `${Math.abs(d)}d overdue` : `in ${d}d`) : 'no date'}</Badge>
+                    </div>
+                    <Button variant="ghost" size="sm" onClick={()=>remove(it.id)}><Trash2 className="h-4 w-4 text-slate-400"/></Button>
+                  </div>
+                </div>
+              );
+            })}</div>
+        }
+      </CardContent>
+    </Card>
+  );
+}
+
+function IssuesTab({ properties, profile }) {
+  const [issues, setIssues] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [open, setOpen] = useState(false);
+  const [form, setForm] = useState({ property_id: '', title: '', description: '' });
+  const [saving, setSaving] = useState(false);
+  const [files, setFiles] = useState([]);
+  const [sendOpen, setSendOpen] = useState(null);
+  const [sendTo, setSendTo] = useState('');
+
+  const load = useCallback(async () => {
+    try { const r = await api('issues'); setIssues(r.issues || []); } catch (e) { toast.error(e.message); }
+    setLoading(false);
+  }, []);
+  useEffect(() => { load(); }, [load]);
+
+  async function create() {
+    if (!form.property_id || !form.title) { toast.error('Property and title required'); return; }
+    setSaving(true);
+    try {
+      const urls = [];
+      for (const f of files) urls.push((await uploadToBucket('issues', f)).url);
+      await api('issues', { method: 'POST', body: JSON.stringify({ ...form, photo_urls: urls }) });
+      toast.success('Issue reported. AI draft ready!');
+      setOpen(false); setForm({ property_id: '', title: '', description: '' }); setFiles([]);
+      load();
+    } catch (e) { toast.error(e.message); } finally { setSaving(false); }
+  }
+
+  async function updateStatus(id, status) {
+    try { await api(`issues/${id}`, { method: 'PATCH', body: JSON.stringify({ status }) }); load(); }
+    catch (e) { toast.error(e.message); }
+  }
+
+  async function sendEmail(id) {
+    try {
+      await api(`issues/${id}/send`, { method: 'POST', body: JSON.stringify({ to: sendTo }) });
+      toast.success(`Email sent to ${sendTo}`);
+      setSendOpen(null); setSendTo('');
+    } catch (e) { toast.error(e.message); }
+  }
+
+  return (
+    <Card>
+      <CardHeader className="flex flex-row items-center justify-between">
+        <div>
+          <CardTitle className="flex items-center gap-2"><Wrench className="h-5 w-5 text-emerald-600"/>Repair & Issues</CardTitle>
+          <CardDescription>Report issues. AI drafts professional repair emails automatically.</CardDescription>
+        </div>
+        <Dialog open={open} onOpenChange={setOpen}>
+          <DialogTrigger asChild><Button className="bg-emerald-600 hover:bg-emerald-700"><Plus className="h-4 w-4 mr-2"/>Report issue</Button></DialogTrigger>
+          <DialogContent>
+            <DialogHeader><DialogTitle>Report an issue</DialogTitle></DialogHeader>
+            <div className="space-y-3">
+              <div>
+                <Label>Property</Label>
+                <Select value={form.property_id} onValueChange={(v)=>setForm({...form,property_id:v})}>
+                  <SelectTrigger><SelectValue placeholder="Select property"/></SelectTrigger>
+                  <SelectContent>{properties.map(p=><SelectItem key={p.id} value={p.id}>{p.address_line1}</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
+              <div><Label>Title</Label><Input value={form.title} onChange={(e)=>setForm({...form,title:e.target.value})} placeholder="e.g. Leaking kitchen tap"/></div>
+              <div><Label>Description</Label><Textarea rows={4} value={form.description} onChange={(e)=>setForm({...form,description:e.target.value})} placeholder="Describe the issue..."/></div>
+              <div><Label>Photos (optional)</Label><Input type="file" multiple accept="image/*" onChange={(e)=>setFiles(Array.from(e.target.files||[]))}/></div>
+            </div>
+            <DialogFooter><Button onClick={create} disabled={saving} className="bg-emerald-600 hover:bg-emerald-700">{saving?<><Loader2 className="h-4 w-4 animate-spin mr-2"/>Drafting...</>:<><Sparkles className="h-4 w-4 mr-2"/>Submit & draft</>}</Button></DialogFooter>
+          </DialogContent>
+        </Dialog>
+      </CardHeader>
+      <CardContent>
+        {loading ? <div className="flex items-center justify-center py-8 text-slate-500"><Loader2 className="h-5 w-5 animate-spin mr-2"/>Loading...</div>
+          : issues.length === 0 ? <div className="text-center py-8 text-slate-500"><Wrench className="h-12 w-12 mx-auto mb-2 text-slate-300"/>No issues reported yet.</div>
+          : <div className="space-y-3">{issues.map(i => {
+              let draft = null;
+              try { draft = i.ai_drafted_message ? JSON.parse(i.ai_drafted_message) : null; } catch {}
+              const statusColor = i.status === 'open' ? 'bg-red-100 text-red-700' : i.status === 'in_progress' ? 'bg-yellow-100 text-yellow-700' : 'bg-green-100 text-green-700';
+              return (
+                <div key={i.id} className="border rounded-lg p-4">
+                  <div className="flex items-start justify-between mb-2">
+                    <div>
+                      <h4 className="font-semibold text-slate-900">{i.title}</h4>
+                      <p className="text-xs text-slate-500">{i.properties?.address_line1}</p>
+                    </div>
+                    <div className="flex gap-1">
+                      {draft?.urgency && <Badge variant="outline" className="capitalize">{draft.urgency}</Badge>}
+                      <Badge className={`capitalize ${statusColor}`}>{i.status}</Badge>
+                    </div>
+                  </div>
+                  {i.description && <p className="text-sm text-slate-600 mb-2">{i.description}</p>}
+                  {draft && (
+                    <div className="mt-2 p-3 bg-emerald-50 border border-emerald-200 rounded">
+                      <div className="text-xs font-semibold text-emerald-800 mb-1 flex items-center gap-1"><Sparkles className="h-3 w-3"/>AI-drafted email</div>
+                      <div className="text-xs text-slate-700"><strong>Subject:</strong> {draft.subject}</div>
+                      <pre className="text-xs text-slate-700 mt-1 whitespace-pre-wrap font-sans">{draft.body}</pre>
+                    </div>
+                  )}
+                  <div className="flex gap-2 mt-3">
+                    {i.status !== 'closed' && (
+                      <Select value={i.status} onValueChange={(v)=>updateStatus(i.id, v)}>
+                        <SelectTrigger className="w-36 h-8 text-xs"><SelectValue/></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="open">Open</SelectItem>
+                          <SelectItem value="in_progress">In progress</SelectItem>
+                          <SelectItem value="closed">Closed</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    )}
+                    {draft && (
+                      <Dialog open={sendOpen === i.id} onOpenChange={(o)=>setSendOpen(o?i.id:null)}>
+                        <DialogTrigger asChild><Button size="sm" variant="outline"><Mail className="h-3 w-3 mr-1"/>Email this</Button></DialogTrigger>
+                        <DialogContent>
+                          <DialogHeader><DialogTitle>Send issue email</DialogTitle></DialogHeader>
+                          <div className="space-y-3">
+                            <div><Label>Recipient email</Label><Input type="email" value={sendTo} onChange={(e)=>setSendTo(e.target.value)} placeholder="landlord@example.com"/></div>
+                            <p className="text-xs text-slate-500">The AI-drafted email below will be sent via SendGrid with reply-to set to your email.</p>
+                          </div>
+                          <DialogFooter><Button onClick={()=>sendEmail(i.id)} disabled={!sendTo} className="bg-emerald-600 hover:bg-emerald-700"><Send className="h-3 w-3 mr-1"/>Send</Button></DialogFooter>
+                        </DialogContent>
+                      </Dialog>
+                    )}
+                  </div>
+                </div>
+              );
+            })}</div>
+        }
+      </CardContent>
+    </Card>
+  );
+}
+
+function StatCard({ icon: Icon, label, value, color }) {
+  return (
+    <Card className="border-slate-200">
+      <CardContent className="pt-6">
+        <div className="flex items-center gap-3">
+          <div className={`h-10 w-10 rounded-lg flex items-center justify-center ${color}`}><Icon className="h-5 w-5"/></div>
+          <div>
+            <div className="text-2xl font-bold text-slate-900">{value}</div>
+            <div className="text-xs text-slate-500">{label}</div>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function Dashboard({ user, profile, onSignOut }) {
+  const [properties, setProperties] = useState([]);
+  const [stats, setStats] = useState({ properties: 0, tenancies: 0, openIssues: 0, expiringCompliance: 0 });
+  const [loading, setLoading] = useState(true);
+
+  const loadAll = useCallback(async () => {
+    try {
+      const [pr, iss, comp] = await Promise.all([
+        api('properties').catch(() => ({ properties: [] })),
+        api('issues').catch(() => ({ issues: [] })),
+        api('compliance').catch(() => ({ compliance: [] })),
+      ]);
+      setProperties(pr.properties || []);
+      // count tenancies across properties (light fetch)
+      let totalTen = 0;
+      for (const p of pr.properties || []) {
+        try { const r = await api(`properties/${p.id}`); totalTen += (r.tenancies || []).length; } catch {}
+      }
+      const openIssues = (iss.issues || []).filter(i => i.status !== 'closed').length;
+      const expiring = (comp.compliance || []).filter(c => {
+        if (!c.expiry_date) return false;
+        const d = Math.ceil((new Date(c.expiry_date) - new Date()) / (1000 * 60 * 60 * 24));
+        return d < 60;
+      }).length;
+      setStats({ properties: (pr.properties || []).length, tenancies: totalTen, openIssues, expiringCompliance: expiring });
+    } catch (e) { toast.error(e.message); }
+    setLoading(false);
+  }, []);
+  useEffect(() => { loadAll(); }, [loadAll]);
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -644,7 +921,7 @@ function Dashboard({ user, profile, onSignOut }) {
             <Badge variant="outline" className="ml-2 capitalize">{profile?.role}</Badge>
           </div>
           <div className="flex items-center gap-3">
-            <span className="text-sm text-slate-600">{user.email}</span>
+            <span className="text-sm text-slate-600 hidden sm:inline">{user.email}</span>
             <Button variant="outline" size="sm" onClick={onSignOut}><LogOut className="h-4 w-4 mr-1"/>Sign out</Button>
           </div>
         </div>
@@ -658,18 +935,27 @@ function Dashboard({ user, profile, onSignOut }) {
           </div>
         </div>
 
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+          <StatCard icon={Building2} label="Properties" value={stats.properties} color="bg-blue-100 text-blue-600"/>
+          <StatCard icon={Home} label="Active tenancies" value={stats.tenancies} color="bg-indigo-100 text-indigo-600"/>
+          <StatCard icon={Wrench} label="Open issues" value={stats.openIssues} color="bg-emerald-100 text-emerald-600"/>
+          <StatCard icon={ShieldCheck} label="Expiring < 60d" value={stats.expiringCompliance} color="bg-rose-100 text-rose-600"/>
+        </div>
+
         <Tabs defaultValue="properties">
-          <TabsList className="mb-6">
+          <TabsList className="mb-6 flex-wrap h-auto">
             <TabsTrigger value="properties"><Home className="h-4 w-4 mr-2"/>Properties</TabsTrigger>
             <TabsTrigger value="inventory"><Camera className="h-4 w-4 mr-2"/>AI Inventory</TabsTrigger>
             <TabsTrigger value="contract"><FileText className="h-4 w-4 mr-2"/>AI Contract</TabsTrigger>
             <TabsTrigger value="damage"><ScanSearch className="h-4 w-4 mr-2"/>AI Damage</TabsTrigger>
+            <TabsTrigger value="issues"><Wrench className="h-4 w-4 mr-2"/>Issues</TabsTrigger>
+            {profile?.role === 'landlord' && <TabsTrigger value="compliance"><ShieldCheck className="h-4 w-4 mr-2"/>Compliance</TabsTrigger>}
           </TabsList>
 
           <TabsContent value="properties">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-semibold">Your properties</h2>
-              {profile?.role === 'landlord' && <PropertyCreateDialog onCreated={loadProps}/>}
+              {profile?.role === 'landlord' && <PropertyCreateDialog onCreated={loadAll}/>}
             </div>
             {loading ? (
               <div className="flex items-center justify-center py-12 text-slate-500"><Loader2 className="h-5 w-5 animate-spin mr-2"/>Loading...</div>
@@ -680,7 +966,7 @@ function Dashboard({ user, profile, onSignOut }) {
               </CardContent></Card>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {properties.map(p => <PropertyCard key={p.id} property={p} onChanged={loadProps}/>)}
+                {properties.map(p => <PropertyCard key={p.id} property={p} onChanged={loadAll}/>)}
               </div>
             )}
           </TabsContent>
@@ -688,6 +974,8 @@ function Dashboard({ user, profile, onSignOut }) {
           <TabsContent value="inventory"><AIInventoryTool properties={properties}/></TabsContent>
           <TabsContent value="contract"><AIContractTool properties={properties}/></TabsContent>
           <TabsContent value="damage"><AIDamageDetector properties={properties}/></TabsContent>
+          <TabsContent value="issues"><IssuesTab properties={properties} profile={profile}/></TabsContent>
+          {profile?.role === 'landlord' && <TabsContent value="compliance"><ComplianceTab properties={properties}/></TabsContent>}
         </Tabs>
       </div>
     </div>

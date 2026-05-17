@@ -448,6 +448,20 @@ async function handle(request, { params }) {
     }
 
     // ===== COMPLIANCE =====
+    if (path === 'compliance' && method === 'GET') {
+      // Get all compliance items for landlord's properties
+      const { data: props } = await admin.from('properties').select('id').eq('landlord_id', user.id);
+      const propIds = (props || []).map(p => p.id);
+      if (propIds.length === 0) return json({ compliance: [] });
+      const { data, error } = await admin
+        .from('compliance_items')
+        .select('*, properties(address_line1, postcode)')
+        .in('property_id', propIds)
+        .order('expiry_date', { ascending: true });
+      if (error) return json({ error: error.message }, 500);
+      return json({ compliance: data });
+    }
+
     if (path === 'compliance' && method === 'POST') {
       const body = await request.json();
       const { data, error } = await admin
@@ -461,6 +475,70 @@ async function handle(request, { params }) {
         .single();
       if (error) return json({ error: error.message }, 400);
       return json({ compliance: data }, 201);
+    }
+
+    // Delete compliance item
+    const compDelMatch = path.match(/^compliance\/([^/]+)$/);
+    if (compDelMatch && method === 'DELETE') {
+      const { error } = await admin.from('compliance_items').delete().eq('id', compDelMatch[1]);
+      if (error) return json({ error: error.message }, 400);
+      return json({ ok: true });
+    }
+
+    // ===== SEND ISSUE EMAIL VIA SENDGRID =====
+    const sendIssueMatch = path.match(/^issues\/([^/]+)\/send$/);
+    if (sendIssueMatch && method === 'POST') {
+      const issueId = sendIssueMatch[1];
+      const body = await request.json().catch(() => ({}));
+      const recipientEmail = body.to;
+      if (!recipientEmail) return json({ error: 'Recipient email required' }, 400);
+
+      const { data: issue } = await admin.from('issues').select('*').eq('id', issueId).maybeSingle();
+      if (!issue) return json({ error: 'Issue not found' }, 404);
+      if (!issue.ai_drafted_message) return json({ error: 'No AI draft on this issue' }, 400);
+
+      let draft;
+      try { draft = JSON.parse(issue.ai_drafted_message); } catch { return json({ error: 'Invalid AI draft' }, 400); }
+
+      if (!process.env.SENDGRID_API_KEY) return json({ error: 'SendGrid not configured' }, 500);
+
+      try {
+        await sgMail.send({
+          to: recipientEmail,
+          from: process.env.SENDGRID_FROM_EMAIL || 'noreply@example.com',
+          replyTo: user.email,
+          subject: draft.subject || `Issue: ${issue.title}`,
+          text: draft.body || issue.description || '',
+          html: `<p>${(draft.body || issue.description || '').replace(/\n/g, '<br/>')}</p><p><em>Sent via TenantAI on behalf of ${user.email}</em></p>`,
+        });
+      } catch (e) {
+        console.error('SendGrid error', e?.response?.body || e);
+        return json({ error: 'Failed to send email: ' + (e.message || 'unknown') }, 500);
+      }
+
+      await admin.from('notifications').insert({
+        user_id: user.id,
+        message: `Email sent to ${recipientEmail} for issue: ${issue.title}`,
+        type: 'issue_email_sent',
+      });
+
+      return json({ ok: true, sent_to: recipientEmail });
+    }
+
+    // ===== ISSUES list =====
+    if (path === 'issues' && method === 'GET') {
+      let q = admin.from('issues').select('*, properties(address_line1)').order('created_at', { ascending: false });
+      if (profile?.role === 'landlord') {
+        const { data: props } = await admin.from('properties').select('id').eq('landlord_id', user.id);
+        const ids = (props || []).map(p => p.id);
+        if (ids.length === 0) return json({ issues: [] });
+        q = q.in('property_id', ids);
+      } else {
+        q = q.eq('created_by', user.id);
+      }
+      const { data, error } = await q;
+      if (error) return json({ error: error.message }, 500);
+      return json({ issues: data });
     }
 
     return json({ error: `Route /${path} not found` }, 404);

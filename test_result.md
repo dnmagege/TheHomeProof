@@ -220,6 +220,30 @@ backend:
         agent: "testing"
         comment: "✅ PASSED: AI Damage Detector working with REAL OpenAI GPT-4o Vision API. Successfully compared before/after photos and generated damage report with damages array, missing_items, fair_wear_and_tear, overall_assessment, total_estimated_deduction_gbp, and recommendation. Response time ~15-20 seconds. Test case 12 passed."
 
+  - task: "Compliance GET/POST/DELETE"
+    implemented: true
+    working: "NA"
+    file: "app/api/[[...path]]/route.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "Added GET (lists items for landlord's properties with property join) and DELETE /compliance/:id. POST already existed."
+
+  - task: "Issues GET + SendGrid email"
+    implemented: true
+    working: "NA"
+    file: "app/api/[[...path]]/route.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "Added GET /issues (scoped by role) and POST /issues/:id/send that uses SendGrid to send the AI-drafted email. Reply-to is sender's email. NOTE: SendGrid will only send if SENDGRID_FROM_EMAIL is a verified sender in user's SendGrid account."
+
   - task: "Issues with AI draft + status updates"
     implemented: true
     working: true
