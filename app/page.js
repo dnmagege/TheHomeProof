@@ -12,7 +12,9 @@ import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
-import { Building2, Sparkles, FileText, Camera, Wrench, ShieldCheck, LogOut, Plus, Loader2, ArrowRight, CheckCircle2, AlertTriangle, ScanSearch, Home, ChevronLeft, Upload, Send, Trash2, Calendar, Mail } from 'lucide-react';
+import { Building2, Sparkles, FileText, Camera, Wrench, ShieldCheck, LogOut, Plus, Loader2, ArrowRight, CheckCircle2, AlertTriangle, ScanSearch, Home, ChevronLeft, Upload, Send, Trash2, Calendar, Mail, TrendingUp, Bot } from 'lucide-react';
+import { t, detectLocale, saveLocale, formatCurrency } from '@/lib/i18n';
+import { useLocaleState, ThemeToggle, SettingsDialog, AIRentEstimator, AICoPilot, PrintInventoryButton } from '@/lib/features';
 
 const supabase = getSupabaseClient();
 
@@ -44,69 +46,72 @@ async function uploadToBucket(bucket, file) {
   return { path: filePath, url: data.publicUrl };
 }
 
-function Landing({ onGetStarted }) {
+function Landing({ onGetStarted, loc, updateLoc }) {
+  const lang = loc.language;
   return (
-    <div className="min-h-screen bg-gradient-to-b from-slate-50 to-white">
-      <nav className="border-b border-slate-200 bg-white/80 backdrop-blur sticky top-0 z-30">
+    <div className="min-h-screen bg-gradient-to-b from-slate-50 to-white dark:from-slate-950 dark:to-slate-900">
+      <nav className="border-b border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/80 backdrop-blur sticky top-0 z-30">
         <div className="container mx-auto flex h-16 items-center justify-between px-6">
           <div className="flex items-center gap-2">
             <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-blue-600 text-white"><Building2 className="h-5 w-5"/></div>
-            <span className="text-lg font-semibold text-slate-900">TenantAI</span>
+            <span className="text-lg font-semibold text-slate-900 dark:text-slate-100">TenantAI</span>
           </div>
-          <Button onClick={onGetStarted} className="bg-blue-600 hover:bg-blue-700">Get started <ArrowRight className="ml-2 h-4 w-4"/></Button>
+          <div className="flex items-center gap-2">
+            <SettingsDialog loc={loc} onUpdate={updateLoc}/>
+            <ThemeToggle/>
+            <Button onClick={onGetStarted} className="bg-blue-600 hover:bg-blue-700">{t('getStarted', lang)} <ArrowRight className="ml-2 h-4 w-4"/></Button>
+          </div>
         </div>
       </nav>
 
       <section className="container mx-auto px-6 pt-16 pb-20 md:pt-24 md:pb-28">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
           <div>
-            <Badge className="mb-5 bg-blue-100 text-blue-700 hover:bg-blue-100">AI-powered tenancy management</Badge>
-            <h1 className="text-4xl md:text-6xl font-bold tracking-tight text-slate-900 leading-tight">
-              Automate everything after the tenancy <span className="text-blue-600">begins</span>.
+            <Badge className="mb-5 bg-blue-100 text-blue-700 hover:bg-blue-100 dark:bg-blue-950 dark:text-blue-300">{t('appTagline', lang)}</Badge>
+            <h1 className="text-4xl md:text-6xl font-bold tracking-tight text-slate-900 dark:text-slate-100 leading-tight">
+              {t('landingHeroBefore', lang)} <span className="text-blue-600">{t('landingHeroAfter', lang)}</span>
             </h1>
-            <p className="mt-6 text-lg text-slate-600 max-w-xl">
-              Generate inventories from photos. Read contracts in seconds. Detect damage with AI vision. Track compliance. Built for UK landlords and tenants.
-            </p>
+            <p className="mt-6 text-lg text-slate-600 dark:text-slate-400 max-w-xl">{t('landingSubtitle', lang)}</p>
             <div className="mt-8 flex flex-col sm:flex-row gap-3">
-              <Button onClick={onGetStarted} size="lg" className="bg-blue-600 hover:bg-blue-700">Start free <ArrowRight className="ml-2 h-4 w-4"/></Button>
-              <Button onClick={onGetStarted} variant="outline" size="lg">Sign in</Button>
+              <Button onClick={onGetStarted} size="lg" className="bg-blue-600 hover:bg-blue-700">{t('startFree', lang)} <ArrowRight className="ml-2 h-4 w-4"/></Button>
+              <Button onClick={onGetStarted} variant="outline" size="lg">{t('signIn', lang)}</Button>
             </div>
             <div className="mt-10 grid grid-cols-3 gap-6">
-              {[{n:'30s', l:'AI inventory'},{n:'1-click', l:'Contract reading'},{n:'24/7', l:'Damage detection'}].map((s,i)=>(
-                <div key={i}><div className="text-2xl font-bold text-slate-900">{s.n}</div><div className="text-sm text-slate-500">{s.l}</div></div>
+              {[{n:'30s', l:t('aiInventory', lang)},{n:'1-click', l:t('aiContract', lang)},{n:'24/7', l:t('aiCopilot', lang)}].map((s,i)=>(
+                <div key={i}><div className="text-2xl font-bold text-slate-900 dark:text-slate-100">{s.n}</div><div className="text-sm text-slate-500">{s.l}</div></div>
               ))}
             </div>
           </div>
           <div className="relative">
             <img src="https://images.unsplash.com/photo-1511452885600-a3d2c9148a31?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1MDV8MHwxfHNlYXJjaHwxfHxwcm9wZXJ0eSUyMG1hbmFnZW1lbnR8ZW58MHx8fGJsdWV8MTc3ODg3OTEyNXww&ixlib=rb-4.1.0&q=85" alt="Properties" className="rounded-2xl shadow-2xl w-full h-[500px] object-cover"/>
-            <div className="absolute -bottom-6 -left-6 bg-white rounded-xl shadow-xl p-4 flex items-center gap-3 max-w-xs">
+            <div className="absolute -bottom-6 -left-6 bg-white dark:bg-slate-800 rounded-xl shadow-xl p-4 flex items-center gap-3 max-w-xs">
               <div className="h-10 w-10 rounded-full bg-green-100 text-green-600 flex items-center justify-center"><CheckCircle2 className="h-5 w-5"/></div>
-              <div><div className="text-sm font-semibold text-slate-900">Inventory generated</div><div className="text-xs text-slate-500">12 rooms · 84 items detected</div></div>
+              <div><div className="text-sm font-semibold text-slate-900 dark:text-slate-100">Inventory generated</div><div className="text-xs text-slate-500">12 rooms · 84 items detected</div></div>
             </div>
           </div>
         </div>
       </section>
 
-      <section className="bg-slate-50 py-20">
+      <section className="bg-slate-50 dark:bg-slate-950 py-20">
         <div className="container mx-auto px-6">
           <div className="text-center max-w-2xl mx-auto mb-14">
-            <h2 className="text-3xl md:text-4xl font-bold text-slate-900">Everything tenancy. Powered by AI.</h2>
-            <p className="mt-4 text-slate-600">Skip the spreadsheets, paperwork, and disputes. Let AI handle the heavy lifting.</p>
+            <h2 className="text-3xl md:text-4xl font-bold text-slate-900 dark:text-slate-100">{t('featuresTitle', lang)}</h2>
+            <p className="mt-4 text-slate-600 dark:text-slate-400">{t('featuresSubtitle', lang)}</p>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {[
-              {icon:Camera, title:'AI Inventory Generator', desc:'Upload photos. Get a professional room-by-room inventory in 30 seconds.', color:'bg-blue-100 text-blue-600'},
-              {icon:FileText, title:'Contract Reader', desc:'Upload tenancy agreement. AI extracts your rights, obligations, and notice periods.', color:'bg-purple-100 text-purple-600'},
-              {icon:ScanSearch, title:'Damage Detector', desc:'Compare before/after photos. AI flags new damage and estimates deductions.', color:'bg-amber-100 text-amber-600'},
-              {icon:Wrench, title:'Repair Tracker', desc:'Describe an issue. AI drafts a polite, legally-sound email to your landlord.', color:'bg-emerald-100 text-emerald-600'},
-              {icon:ShieldCheck, title:'Compliance Engine', desc:'Gas, EPC, EICR — track every certificate. Never miss an expiry date again.', color:'bg-rose-100 text-rose-600'},
-              {icon:Building2, title:'Property Portfolio', desc:'Manage multiple properties, tenancies, and documents in one beautiful dashboard.', color:'bg-indigo-100 text-indigo-600'},
+              {icon:Camera, title:t('aiInventory', lang), desc:t('inventoryDesc', lang), color:'bg-blue-100 text-blue-600'},
+              {icon:FileText, title:t('aiContract', lang), desc:t('contractDesc', lang), color:'bg-purple-100 text-purple-600'},
+              {icon:ScanSearch, title:t('aiDamage', lang), desc:t('damageDesc', lang), color:'bg-amber-100 text-amber-600'},
+              {icon:TrendingUp, title:t('aiRent', lang), desc:t('rentDesc', lang), color:'bg-cyan-100 text-cyan-600'},
+              {icon:Bot, title:t('aiCopilot', lang), desc:t('copilotDesc', lang), color:'bg-violet-100 text-violet-600'},
+              {icon:ShieldCheck, title:t('compliance', lang), desc:'Gas, EPC, EICR — track every certificate. Never miss an expiry.', color:'bg-rose-100 text-rose-600'},
             ].map((f, i) => (
-              <Card key={i} className="border-slate-200 hover:shadow-lg transition-shadow">
+              <Card key={i} className="border-slate-200 dark:border-slate-800 hover:shadow-lg transition-shadow">
                 <CardContent className="pt-6">
                   <div className={`inline-flex h-12 w-12 items-center justify-center rounded-xl ${f.color} mb-4`}><f.icon className="h-6 w-6"/></div>
-                  <h3 className="text-lg font-semibold text-slate-900">{f.title}</h3>
-                  <p className="mt-2 text-sm text-slate-600">{f.desc}</p>
+                  <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">{f.title}</h3>
+                  <p className="mt-2 text-sm text-slate-600 dark:text-slate-400">{f.desc}</p>
                 </CardContent>
               </Card>
             ))}
@@ -116,20 +121,21 @@ function Landing({ onGetStarted }) {
 
       <section className="py-20">
         <div className="container mx-auto px-6 text-center">
-          <h2 className="text-3xl md:text-4xl font-bold text-slate-900">Ready to upgrade your tenancy?</h2>
-          <p className="mt-4 text-slate-600 max-w-xl mx-auto">Free during beta. No credit card. Set up in 60 seconds.</p>
-          <Button onClick={onGetStarted} size="lg" className="mt-8 bg-blue-600 hover:bg-blue-700">Get started free <ArrowRight className="ml-2 h-4 w-4"/></Button>
+          <h2 className="text-3xl md:text-4xl font-bold text-slate-900 dark:text-slate-100">Ready to upgrade your tenancy?</h2>
+          <p className="mt-4 text-slate-600 dark:text-slate-400 max-w-xl mx-auto">Free during beta. No credit card. Set up in 60 seconds.</p>
+          <Button onClick={onGetStarted} size="lg" className="mt-8 bg-blue-600 hover:bg-blue-700">{t('startFree', lang)} <ArrowRight className="ml-2 h-4 w-4"/></Button>
         </div>
       </section>
 
-      <footer className="border-t border-slate-200 py-8">
-        <div className="container mx-auto px-6 text-center text-sm text-slate-500">© {new Date().getFullYear()} TenantAI · AI Tenancy Management</div>
+      <footer className="border-t border-slate-200 dark:border-slate-800 py-8">
+        <div className="container mx-auto px-6 text-center text-sm text-slate-500">© {new Date().getFullYear()} TenantAI · {t('appTagline', lang)}</div>
       </footer>
     </div>
   );
 }
 
-function AuthPage({ mode, setMode, onSuccess, onBack }) {
+function AuthPage({ mode, setMode, onSuccess, onBack, loc }) {
+  const lang = loc?.language || 'en';
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
@@ -166,52 +172,52 @@ function AuthPage({ mode, setMode, onSuccess, onBack }) {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-slate-50 flex items-center justify-center p-6">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-slate-50 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950 flex items-center justify-center p-6">
       <div className="w-full max-w-md">
-        <button onClick={onBack} className="mb-6 inline-flex items-center text-sm text-slate-600 hover:text-slate-900"><ChevronLeft className="h-4 w-4 mr-1"/>Back to home</button>
-        <Card className="border-slate-200 shadow-xl">
+        <button onClick={onBack} className="mb-6 inline-flex items-center text-sm text-slate-600 dark:text-slate-400 hover:text-slate-900"><ChevronLeft className="h-4 w-4 mr-1"/>Back</button>
+        <Card className="border-slate-200 dark:border-slate-800 shadow-xl">
           <CardHeader>
             <div className="flex items-center gap-2 mb-2">
               <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-blue-600 text-white"><Building2 className="h-5 w-5"/></div>
               <span className="text-lg font-semibold">TenantAI</span>
             </div>
-            <CardTitle>{mode === 'signup' ? 'Create your account' : 'Welcome back'}</CardTitle>
-            <CardDescription>{mode === 'signup' ? 'Start automating your tenancies in 60 seconds.' : 'Sign in to your account'}</CardDescription>
+            <CardTitle>{mode === 'signup' ? t('createAccount', lang) : t('welcomeBack', lang)}</CardTitle>
+            <CardDescription>{mode === 'signup' ? t('appTagline', lang) : t('signIn', lang)}</CardDescription>
           </CardHeader>
           <CardContent>
             <form onSubmit={handle} className="space-y-4">
               {mode === 'signup' && (<>
                 <div>
-                  <Label htmlFor="name">Name</Label>
+                  <Label htmlFor="name">{t('name', lang)}</Label>
                   <Input id="name" value={name} onChange={(e)=>setName(e.target.value)} required/>
                 </div>
                 <div>
-                  <Label htmlFor="role">I am a...</Label>
+                  <Label htmlFor="role">{t('iAmA', lang)}</Label>
                   <Select value={role} onValueChange={setRole}>
                     <SelectTrigger id="role"><SelectValue/></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="landlord">Landlord</SelectItem>
-                      <SelectItem value="tenant">Tenant</SelectItem>
+                      <SelectItem value="landlord">{t('landlord', lang)}</SelectItem>
+                      <SelectItem value="tenant">{t('tenant', lang)}</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
               </>)}
               <div>
-                <Label htmlFor="email">Email</Label>
+                <Label htmlFor="email">{t('email', lang)}</Label>
                 <Input id="email" type="email" value={email} onChange={(e)=>setEmail(e.target.value)} required/>
               </div>
               <div>
-                <Label htmlFor="password">Password</Label>
+                <Label htmlFor="password">{t('password', lang)}</Label>
                 <Input id="password" type="password" minLength={6} value={password} onChange={(e)=>setPassword(e.target.value)} required/>
               </div>
               <Button type="submit" className="w-full bg-blue-600 hover:bg-blue-700" disabled={loading}>
-                {loading ? <Loader2 className="h-4 w-4 animate-spin"/> : (mode === 'signup' ? 'Create account' : 'Sign in')}
+                {loading ? <Loader2 className="h-4 w-4 animate-spin"/> : (mode === 'signup' ? t('signUp', lang) : t('signIn', lang))}
               </Button>
             </form>
-            <p className="mt-4 text-sm text-center text-slate-600">
+            <p className="mt-4 text-sm text-center text-slate-600 dark:text-slate-400">
               {mode === 'signup' ? 'Already have an account?' : "Don't have an account?"}{' '}
               <button onClick={()=>setMode(mode==='signup'?'login':'signup')} className="text-blue-600 hover:underline font-medium">
-                {mode === 'signup' ? 'Sign in' : 'Sign up'}
+                {mode === 'signup' ? t('signIn', lang) : t('signUp', lang)}
               </button>
             </p>
           </CardContent>
@@ -260,7 +266,7 @@ function PropertyCreateDialog({ onCreated }) {
   );
 }
 
-function AIInventoryTool({ properties }) {
+function AIInventoryTool({ properties, loc }) {
   const [propertyId, setPropertyId] = useState('');
   const [files, setFiles] = useState([]);
   const [previews, setPreviews] = useState([]);
@@ -290,33 +296,38 @@ function AIInventoryTool({ properties }) {
     } catch (e) { toast.error(e.message); } finally { setLoading(false); }
   }
 
+  const lang = loc?.language || 'en';
+  const selectedProperty = properties.find(p => p.id === propertyId);
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="flex items-center gap-2"><Camera className="h-5 w-5 text-blue-600"/>AI Inventory Generator</CardTitle>
-        <CardDescription>Upload property photos. AI will generate a complete room-by-room inventory.</CardDescription>
+        <CardTitle className="flex items-center gap-2"><Camera className="h-5 w-5 text-blue-600"/>{t('aiInventory', lang)}</CardTitle>
+        <CardDescription>{t('inventoryDesc', lang)}</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         <div>
-          <Label>Property</Label>
+          <Label>{t('properties', lang)}</Label>
           <Select value={propertyId} onValueChange={setPropertyId}>
-            <SelectTrigger><SelectValue placeholder="Select a property"/></SelectTrigger>
+            <SelectTrigger><SelectValue placeholder={t('selectProperty', lang)}/></SelectTrigger>
             <SelectContent>
               {properties.map(p => <SelectItem key={p.id} value={p.id}>{p.address_line1}{p.postcode ? `, ${p.postcode}` : ''}</SelectItem>)}
             </SelectContent>
           </Select>
         </div>
         <div>
-          <Label>Photos (you can select multiple)</Label>
+          <Label>{t('photos', lang)}</Label>
           <Input type="file" accept="image/*" multiple onChange={onFiles}/>
         </div>
         {previews.length > 0 && (
-          <div className="grid grid-cols-4 gap-2">{previews.map((u,i)=><img key={i} src={u} className="h-20 w-full object-cover rounded"/>)}</div>
+          <div className="grid grid-cols-4 gap-2">{previews.map((u,i)=><img key={i} src={u} className="h-20 w-full object-cover rounded" alt=""/>)}</div>
         )}
         <Button onClick={generate} disabled={loading} className="w-full bg-blue-600 hover:bg-blue-700">
-          {loading ? <><Loader2 className="h-4 w-4 animate-spin mr-2"/>Generating...</> : <><Sparkles className="h-4 w-4 mr-2"/>Generate inventory</>}
+          {loading ? <><Loader2 className="h-4 w-4 animate-spin mr-2"/>Generating...</> : <><Sparkles className="h-4 w-4 mr-2"/>{t('generateInventory', lang)}</>}
         </Button>
-        {result && <InventoryResult data={result}/>}
+        {result && <>
+          <div className="flex justify-end -mb-2"><PrintInventoryButton data={result} propertyAddress={selectedProperty?.address_line1}/></div>
+          <InventoryResult data={result}/>
+        </>}
       </CardContent>
     </Card>
   );
@@ -596,7 +607,7 @@ function TenancyDialog({ propertyId, onCreated }) {
   );
 }
 
-function PropertyCard({ property, onChanged }) {
+function PropertyCard({ property, onChanged, loc }) {
   const [detail, setDetail] = useState(null);
   const load = useCallback(async () => { try { const r = await api(`properties/${property.id}`); setDetail(r); } catch(e){ toast.error(e.message); } }, [property.id]);
   useEffect(() => { load(); }, [load]);
@@ -616,8 +627,8 @@ function PropertyCard({ property, onChanged }) {
         </div>
         <TenancyDialog propertyId={property.id} onCreated={()=>{load(); onChanged();}}/>
         {detail?.tenancies?.length > 0 && (
-          <div className="text-xs text-slate-600 space-y-1">
-            {detail.tenancies.map(t => <div key={t.id} className="border rounded p-2">Tenant: {t.tenant_email||'—'} · £{t.rent_amount}/{t.rent_frequency}</div>)}
+          <div className="text-xs text-slate-600 dark:text-slate-400 space-y-1">
+            {detail.tenancies.map(t => <div key={t.id} className="border rounded p-2">Tenant: {t.tenant_email||'—'} · {formatCurrency(t.rent_amount, loc?.currency || 'GBP', loc?.locale)}/{t.rent_frequency}</div>)}
           </div>
         )}
       </CardContent>
@@ -881,7 +892,8 @@ function StatCard({ icon: Icon, label, value, color }) {
   );
 }
 
-function Dashboard({ user, profile, onSignOut }) {
+function Dashboard({ user, profile, onSignOut, loc, updateLoc }) {
+  const lang = loc?.language || 'en';
   const [properties, setProperties] = useState([]);
   const [stats, setStats] = useState({ properties: 0, tenancies: 0, openIssues: 0, expiringCompliance: 0 });
   const [loading, setLoading] = useState(true);
@@ -894,7 +906,6 @@ function Dashboard({ user, profile, onSignOut }) {
         api('compliance').catch(() => ({ compliance: [] })),
       ]);
       setProperties(pr.properties || []);
-      // count tenancies across properties (light fetch)
       let totalTen = 0;
       for (const p of pr.properties || []) {
         try { const r = await api(`properties/${p.id}`); totalTen += (r.tenancies || []).length; } catch {}
@@ -912,17 +923,19 @@ function Dashboard({ user, profile, onSignOut }) {
   useEffect(() => { loadAll(); }, [loadAll]);
 
   return (
-    <div className="min-h-screen bg-slate-50">
-      <nav className="border-b border-slate-200 bg-white">
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
+      <nav className="border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
         <div className="container mx-auto flex h-16 items-center justify-between px-6">
           <div className="flex items-center gap-2">
             <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-blue-600 text-white"><Building2 className="h-5 w-5"/></div>
             <span className="text-lg font-semibold">TenantAI</span>
-            <Badge variant="outline" className="ml-2 capitalize">{profile?.role}</Badge>
+            <Badge variant="outline" className="ml-2 capitalize">{profile?.role === 'landlord' ? t('landlord', lang) : t('tenant', lang)}</Badge>
           </div>
-          <div className="flex items-center gap-3">
-            <span className="text-sm text-slate-600 hidden sm:inline">{user.email}</span>
-            <Button variant="outline" size="sm" onClick={onSignOut}><LogOut className="h-4 w-4 mr-1"/>Sign out</Button>
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-slate-600 dark:text-slate-400 hidden sm:inline">{user.email}</span>
+            <SettingsDialog loc={loc} onUpdate={updateLoc}/>
+            <ThemeToggle/>
+            <Button variant="outline" size="sm" onClick={onSignOut}><LogOut className="h-4 w-4 mr-1"/>{t('signOut', lang)}</Button>
           </div>
         </div>
       </nav>
@@ -930,31 +943,33 @@ function Dashboard({ user, profile, onSignOut }) {
       <div className="container mx-auto px-6 py-8">
         <div className="flex items-center justify-between mb-6">
           <div>
-            <h1 className="text-2xl font-bold text-slate-900">Welcome, {profile?.name || user.email.split('@')[0]}</h1>
-            <p className="text-slate-600 text-sm">Manage your properties and tenancies with AI.</p>
+            <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">{t('welcome', lang)}, {profile?.name || user.email.split('@')[0]}</h1>
+            <p className="text-slate-600 dark:text-slate-400 text-sm">{t('dashboardSubtitle', lang)}</p>
           </div>
         </div>
 
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
-          <StatCard icon={Building2} label="Properties" value={stats.properties} color="bg-blue-100 text-blue-600"/>
-          <StatCard icon={Home} label="Active tenancies" value={stats.tenancies} color="bg-indigo-100 text-indigo-600"/>
-          <StatCard icon={Wrench} label="Open issues" value={stats.openIssues} color="bg-emerald-100 text-emerald-600"/>
-          <StatCard icon={ShieldCheck} label="Expiring < 60d" value={stats.expiringCompliance} color="bg-rose-100 text-rose-600"/>
+          <StatCard icon={Building2} label={t('properties', lang)} value={stats.properties} color="bg-blue-100 text-blue-600"/>
+          <StatCard icon={Home} label={t('activeTenancies', lang)} value={stats.tenancies} color="bg-indigo-100 text-indigo-600"/>
+          <StatCard icon={Wrench} label={t('openIssues', lang)} value={stats.openIssues} color="bg-emerald-100 text-emerald-600"/>
+          <StatCard icon={ShieldCheck} label={t('expiringIn60', lang)} value={stats.expiringCompliance} color="bg-rose-100 text-rose-600"/>
         </div>
 
         <Tabs defaultValue="properties">
           <TabsList className="mb-6 flex-wrap h-auto">
-            <TabsTrigger value="properties"><Home className="h-4 w-4 mr-2"/>Properties</TabsTrigger>
-            <TabsTrigger value="inventory"><Camera className="h-4 w-4 mr-2"/>AI Inventory</TabsTrigger>
-            <TabsTrigger value="contract"><FileText className="h-4 w-4 mr-2"/>AI Contract</TabsTrigger>
-            <TabsTrigger value="damage"><ScanSearch className="h-4 w-4 mr-2"/>AI Damage</TabsTrigger>
-            <TabsTrigger value="issues"><Wrench className="h-4 w-4 mr-2"/>Issues</TabsTrigger>
-            {profile?.role === 'landlord' && <TabsTrigger value="compliance"><ShieldCheck className="h-4 w-4 mr-2"/>Compliance</TabsTrigger>}
+            <TabsTrigger value="properties"><Home className="h-4 w-4 mr-2"/>{t('properties', lang)}</TabsTrigger>
+            <TabsTrigger value="inventory"><Camera className="h-4 w-4 mr-2"/>{t('aiInventory', lang)}</TabsTrigger>
+            <TabsTrigger value="contract"><FileText className="h-4 w-4 mr-2"/>{t('aiContract', lang)}</TabsTrigger>
+            <TabsTrigger value="damage"><ScanSearch className="h-4 w-4 mr-2"/>{t('aiDamage', lang)}</TabsTrigger>
+            <TabsTrigger value="rent"><TrendingUp className="h-4 w-4 mr-2"/>{t('aiRent', lang)}</TabsTrigger>
+            <TabsTrigger value="copilot"><Bot className="h-4 w-4 mr-2"/>{t('aiCopilot', lang)}</TabsTrigger>
+            <TabsTrigger value="issues"><Wrench className="h-4 w-4 mr-2"/>{t('issues', lang)}</TabsTrigger>
+            {profile?.role === 'landlord' && <TabsTrigger value="compliance"><ShieldCheck className="h-4 w-4 mr-2"/>{t('compliance', lang)}</TabsTrigger>}
           </TabsList>
 
           <TabsContent value="properties">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-semibold">Your properties</h2>
+              <h2 className="text-lg font-semibold">{t('properties', lang)}</h2>
               {profile?.role === 'landlord' && <PropertyCreateDialog onCreated={loadAll}/>}
             </div>
             {loading ? (
@@ -966,14 +981,16 @@ function Dashboard({ user, profile, onSignOut }) {
               </CardContent></Card>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {properties.map(p => <PropertyCard key={p.id} property={p} onChanged={loadAll}/>)}
+                {properties.map(p => <PropertyCard key={p.id} property={p} onChanged={loadAll} loc={loc}/>)}
               </div>
             )}
           </TabsContent>
 
-          <TabsContent value="inventory"><AIInventoryTool properties={properties}/></TabsContent>
+          <TabsContent value="inventory"><AIInventoryTool properties={properties} loc={loc}/></TabsContent>
           <TabsContent value="contract"><AIContractTool properties={properties}/></TabsContent>
-          <TabsContent value="damage"><AIDamageDetector properties={properties}/></TabsContent>
+          <TabsContent value="damage"><AIDamageDetector properties={properties} loc={loc}/></TabsContent>
+          <TabsContent value="rent"><AIRentEstimator properties={properties} loc={loc} api={api}/></TabsContent>
+          <TabsContent value="copilot"><AICoPilot loc={loc} api={api}/></TabsContent>
           <TabsContent value="issues"><IssuesTab properties={properties} profile={profile}/></TabsContent>
           {profile?.role === 'landlord' && <TabsContent value="compliance"><ComplianceTab properties={properties}/></TabsContent>}
         </Tabs>
@@ -987,6 +1004,7 @@ function App() {
   const [authMode, setAuthMode] = useState('signup');
   const [user, setUser] = useState(null);
   const [profile, setProfile] = useState(null);
+  const { loc, update: updateLoc } = useLocaleState();
 
   const loadProfile = useCallback(async () => {
     try {
@@ -1014,9 +1032,9 @@ function App() {
   async function signOut() { await supabase.auth.signOut(); }
 
   if (view === 'loading') return <div className="min-h-screen flex items-center justify-center"><Loader2 className="h-6 w-6 animate-spin text-blue-600"/></div>;
-  if (view === 'landing') return <Landing onGetStarted={()=>{setAuthMode('signup'); setView('auth');}}/>;
-  if (view === 'auth') return <AuthPage mode={authMode} setMode={setAuthMode} onSuccess={loadProfile} onBack={()=>setView('landing')}/>;
-  if (view === 'dashboard' && user) return <Dashboard user={user} profile={profile} onSignOut={signOut}/>;
+  if (view === 'landing') return <Landing loc={loc} updateLoc={updateLoc} onGetStarted={()=>{setAuthMode('signup'); setView('auth');}}/>;
+  if (view === 'auth') return <AuthPage loc={loc} mode={authMode} setMode={setAuthMode} onSuccess={loadProfile} onBack={()=>setView('landing')}/>;
+  if (view === 'dashboard' && user) return <Dashboard loc={loc} updateLoc={updateLoc} user={user} profile={profile} onSignOut={signOut}/>;
   return null;
 }
 

@@ -220,29 +220,65 @@ backend:
         agent: "testing"
         comment: "✅ PASSED: AI Damage Detector working with REAL OpenAI GPT-4o Vision API. Successfully compared before/after photos and generated damage report with damages array, missing_items, fair_wear_and_tear, overall_assessment, total_estimated_deduction_gbp, and recommendation. Response time ~15-20 seconds. Test case 12 passed."
 
-  - task: "Compliance GET/POST/DELETE"
+  - task: "AI Rent Estimator"
     implemented: true
-    working: "NA"
+    working: true
     file: "app/api/[[...path]]/route.js"
     stuck_count: 0
     priority: "high"
-    needs_retesting: true
+    needs_retesting: false
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "POST /api/rent/estimate takes property details + currency, returns conservative/expected/optimistic rent estimate JSON via GPT-4o."
+      - working: true
+        agent: "testing"
+        comment: "✅ PASSED: AI Rent Estimator working with REAL OpenAI GPT-4o API. Tested with London (GBP) and Madrid (EUR). Returns conservative/expected/optimistic estimates with currency, confidence, comparables_basis, factors_increasing_value, factors_decreasing_value, and marketing_tips. Response time ~3s. London 2-bed: £1800-2200, Madrid 2-bed: €1200-1600. Test cases 11 & 14 passed."
+
+  - task: "AI Co-Pilot Chat"
+    implemented: true
+    working: true
+    file: "app/api/[[...path]]/route.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "POST /api/chat accepts messages[] + language, injects user's property/tenancy context as system prompt, returns AI reply via GPT-4o."
+      - working: true
+        agent: "testing"
+        comment: "✅ PASSED: AI Co-Pilot Chat working with REAL OpenAI GPT-4o API. Tested single-turn and multi-turn conversations. Successfully maintains conversation context and provides relevant responses. Single-turn response time ~2.8s, multi-turn ~2.4s. Correctly answers questions about fair wear and tear with detailed explanations and numbered examples. Test cases 12 & 13 passed."
+
+  - task: "Compliance GET/POST/DELETE"
+    implemented: true
+    working: true
+    file: "app/api/[[...path]]/route.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
     status_history:
       - working: "NA"
         agent: "main"
         comment: "Added GET (lists items for landlord's properties with property join) and DELETE /compliance/:id. POST already existed."
+      - working: true
+        agent: "testing"
+        comment: "✅ PASSED: All Compliance CRUD operations working correctly. GET returns empty array initially, POST creates compliance item with 201 status, GET returns array with properties joined (address_line1, postcode), DELETE returns {ok: true} with 200 status, GET returns empty array after delete. Test cases 3, 4, 5, 6, 7 passed."
 
   - task: "Issues GET + SendGrid email"
     implemented: true
-    working: "NA"
+    working: true
     file: "app/api/[[...path]]/route.js"
     stuck_count: 0
     priority: "high"
-    needs_retesting: true
+    needs_retesting: false
     status_history:
       - working: "NA"
         agent: "main"
         comment: "Added GET /issues (scoped by role) and POST /issues/:id/send that uses SendGrid to send the AI-drafted email. Reply-to is sender's email. NOTE: SendGrid will only send if SENDGRID_FROM_EMAIL is a verified sender in user's SendGrid account."
+      - working: true
+        agent: "testing"
+        comment: "✅ PASSED: Issues GET endpoint working correctly. Returns empty array initially, returns array with properties joined (address_line1) after issue creation. SendGrid endpoint guard working correctly - returns 400 with 'Recipient email required' error when 'to' field is missing. Actual email sending not tested as user has not verified sender in SendGrid. Test cases 8, 10, 15 passed."
 
   - task: "Issues with AI draft + status updates"
     implemented: true
@@ -275,7 +311,7 @@ frontend:
 metadata:
   created_by: "main_agent"
   version: "1.0"
-  test_sequence: 1
+  test_sequence: 2
   run_ui: false
 
 test_plan:
@@ -321,3 +357,32 @@ agent_communication:
       AI features successfully integrate with OpenAI GPT-4o and GPT-4o Vision APIs.
       
       Backend is production-ready. No critical issues found.
+  - agent: "testing"
+    message: |
+      🎉 PHASE 3 BACKEND TESTING COMPLETE - ALL TESTS PASSED (15/15 - 100%)
+      
+      Tested all Phase 3 backend API endpoints with real Supabase auth and OpenAI API calls:
+      
+      ✅ Compliance Management (CRUD):
+         - GET /api/compliance (empty array, with data + properties join)
+         - POST /api/compliance (creates compliance item, returns 201)
+         - DELETE /api/compliance/:id (returns {ok: true})
+      
+      ✅ Issues Management:
+         - GET /api/issues (empty array, with data + properties join)
+         - POST /api/issues/:id/send (SendGrid guard: returns 400 without 'to' field)
+      
+      ✅ AI Rent Estimator (REAL OpenAI GPT-4o calls, NOT MOCKED):
+         - POST /api/rent/estimate (London GBP: £1800-2200, ~3s response)
+         - POST /api/rent/estimate (Madrid EUR: €1200-1600, ~3s response)
+         - Returns conservative/expected/optimistic estimates with currency, confidence, comparables_basis, factors, and marketing_tips
+      
+      ✅ AI Co-Pilot Chat (REAL OpenAI GPT-4o calls, NOT MOCKED):
+         - POST /api/chat (single-turn: fair wear and tear explanation, ~2.8s response)
+         - POST /api/chat (multi-turn: maintains context, provides 3 numbered examples, ~2.4s response)
+         - Correctly injects user context (properties, tenancies, issues, compliance)
+      
+      All Phase 3 endpoints return correct status codes, proper JSON responses, and work with real OpenAI API.
+      SendGrid endpoint guard working correctly (actual sending not tested as sender not verified).
+      
+      Backend Phase 3 is production-ready. No critical issues found.

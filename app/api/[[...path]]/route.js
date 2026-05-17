@@ -541,6 +541,89 @@ async function handle(request, { params }) {
       return json({ issues: data });
     }
 
+    // ===== AI: RENT PRICE ESTIMATOR =====
+    if (path === 'rent/estimate' && method === 'POST') {
+      const body = await request.json();
+      const { city, postcode, country, bedrooms, bathrooms, property_type, condition, furnishing, extra_details, currency } = body;
+      if (!city || bedrooms == null) return json({ error: 'city and bedrooms required' }, 400);
+      const cur = currency || 'GBP';
+      const resp = await openai.chat.completions.create({
+        model: 'gpt-4o',
+        messages: [
+          { role: 'system', content: 'You are a professional real estate appraiser with deep knowledge of rental markets worldwide.' },
+          { role: 'user', content: `Estimate the monthly rent (in ${cur}) for this property:
+- City: ${city}${postcode ? `, postcode ${postcode}` : ''}
+- Country: ${country || 'United Kingdom'}
+- Bedrooms: ${bedrooms}, Bathrooms: ${bathrooms || 'unknown'}
+- Type: ${property_type || 'apartment'}
+- Condition: ${condition || 'good'}
+- Furnishing: ${furnishing || 'unfurnished'}
+- Extra: ${extra_details || 'none'}
+
+Return STRICT JSON:
+{
+  "currency": "${cur}",
+  "conservative": <number>,
+  "expected": <number>,
+  "optimistic": <number>,
+  "confidence": "low|medium|high",
+  "comparables_basis": "Short note on what comparable properties typically rent for in this area",
+  "factors_increasing_value": ["..."],
+  "factors_decreasing_value": ["..."],
+  "marketing_tips": ["3-5 short tips to maximize rent"]
+}` },
+        ],
+        response_format: { type: 'json_object' },
+        max_tokens: 1500,
+      });
+      return json({ estimate: JSON.parse(resp.choices[0].message.content) });
+    }
+
+    // ===== AI: TENANCY CO-PILOT CHAT =====
+    if (path === 'chat' && method === 'POST') {
+      const body = await request.json();
+      const { messages = [], language = 'en' } = body;
+      if (!Array.isArray(messages) || messages.length === 0) return json({ error: 'messages required' }, 400);
+
+      // Build user context (their properties + tenancies + issues + compliance)
+      let context = '';
+      try {
+        if (profile?.role === 'landlord') {
+          const { data: props } = await admin.from('properties').select('id, address_line1, city, postcode').eq('landlord_id', user.id);
+          context += `User is a LANDLORD named ${profile?.name || user.email}.\nThey own ${props?.length || 0} properties: ${(props||[]).map(p => `${p.address_line1}, ${p.city||''}`).join('; ') || 'none'}.\n`;
+          const propIds = (props || []).map(p => p.id);
+          if (propIds.length) {
+            const { data: tens } = await admin.from('tenancies').select('property_id, tenant_email, rent_amount, rent_frequency, start_date, end_date').in('property_id', propIds);
+            context += `Tenancies: ${(tens||[]).map(t=>`${t.tenant_email||'unnamed'} @ ${t.rent_amount}/${t.rent_frequency}`).join('; ') || 'none'}.\n`;
+            const { data: iss } = await admin.from('issues').select('title, status').in('property_id', propIds);
+            context += `Issues: ${(iss||[]).map(i=>`${i.title} [${i.status}]`).join('; ') || 'none'}.\n`;
+            const { data: comp } = await admin.from('compliance_items').select('type, expiry_date').in('property_id', propIds);
+            context += `Compliance: ${(comp||[]).map(c=>`${c.type} expires ${c.expiry_date}`).join('; ') || 'none'}.\n`;
+          }
+        } else {
+          const { data: tens } = await admin.from('tenancies').select('property_id, rent_amount, rent_frequency, start_date, end_date, properties(address_line1, city)').eq('tenant_id', user.id);
+          context += `User is a TENANT named ${profile?.name || user.email}.\nTheir tenancies: ${(tens||[]).map(t=>`${t.properties?.address_line1} @ ${t.rent_amount}/${t.rent_frequency}`).join('; ') || 'none'}.\n`;
+        }
+      } catch (e) { console.error('chat context err', e); }
+
+      const sysPrompt = `You are TenantAI, an expert AI assistant for property management and tenancy law. You help landlords and tenants with practical advice, legal context (UK by default unless the user mentions another country), and document drafting. Be concise and helpful.
+
+USER CONTEXT:
+${context}
+
+Always respond in language code "${language}".`;
+
+      const resp = await openai.chat.completions.create({
+        model: 'gpt-4o',
+        messages: [
+          { role: 'system', content: sysPrompt },
+          ...messages.slice(-20).map(m => ({ role: m.role, content: m.content })),
+        ],
+        max_tokens: 1000,
+      });
+      return json({ reply: resp.choices[0].message.content });
+    }
+
     return json({ error: `Route /${path} not found` }, 404);
   } catch (err) {
     console.error('API error', err);
