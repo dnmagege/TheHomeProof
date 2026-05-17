@@ -513,7 +513,8 @@ async function handle(request, { params }) {
         });
       } catch (e) {
         console.error('SendGrid error', e?.response?.body || e);
-        return json({ error: 'Failed to send email: ' + (e.message || 'unknown') }, 500);
+        const errorDetail = e?.response?.body?.errors?.[0]?.message || e.message || 'unknown';
+        return json({ error: 'Failed to send email: ' + errorDetail }, 500);
       }
 
       await admin.from('notifications').insert({
