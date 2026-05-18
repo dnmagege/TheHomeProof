@@ -51,9 +51,9 @@ function Landing({ onGetStarted, loc, updateLoc }) {
   return (
     <div className="min-h-screen bg-gradient-to-b from-slate-50 to-white dark:from-slate-950 dark:to-slate-900">
       <nav className="border-b border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/80 backdrop-blur sticky top-0 z-30">
-        <div className="container mx-auto flex h-16 items-center justify-between px-6">
+        <div className="container mx-auto flex h-20 items-center justify-between px-6">
           <div className="flex items-center gap-2">
-            <img src="https://customer-assets.emergentagent.com/job_next-supa-stack/artifacts/kkg2riq0_Logo%20%282%29.png" alt="HomeProof" className="h-10 w-auto"/>
+            <img src="https://customer-assets.emergentagent.com/job_next-supa-stack/artifacts/kkg2riq0_Logo%20%282%29.png" alt="HomeProof" className="h-24 w-auto scale-150 origin-left"/>
           </div>
           <div className="hidden md:flex items-center gap-6 text-sm font-medium text-slate-700 dark:text-slate-300">
             <a href="#features" className="hover:text-brand-600 transition-colors">Features</a>
@@ -316,7 +316,7 @@ function AuthPage({ mode, setMode, onSuccess, onBack, loc }) {
         <Card className="border-slate-200 dark:border-slate-800 shadow-xl">
           <CardHeader>
             <div className="flex items-center gap-2 mb-2">
-              <img src="https://customer-assets.emergentagent.com/job_next-supa-stack/artifacts/kkg2riq0_Logo%20%282%29.png" alt="HomeProof" className="h-10 w-auto"/>
+              <img src="https://customer-assets.emergentagent.com/job_next-supa-stack/artifacts/kkg2riq0_Logo%20%282%29.png" alt="HomeProof" className="h-24 w-auto scale-150 origin-left"/>
             </div>
             <CardTitle>{mode === 'signup' ? t('createAccount', lang) : t('welcomeBack', lang)}</CardTitle>
             <CardDescription>{mode === 'signup' ? t('appTagline', lang) : t('signIn', lang)}</CardDescription>
@@ -1062,9 +1062,9 @@ function Dashboard({ user, profile, onSignOut, loc, updateLoc }) {
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
       <nav className="border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
-        <div className="container mx-auto flex h-16 items-center justify-between px-6">
+        <div className="container mx-auto flex h-20 items-center justify-between px-6">
           <div className="flex items-center gap-2">
-            <img src="https://customer-assets.emergentagent.com/job_next-supa-stack/artifacts/kkg2riq0_Logo%20%282%29.png" alt="HomeProof" className="h-10 w-auto"/>
+            <img src="https://customer-assets.emergentagent.com/job_next-supa-stack/artifacts/kkg2riq0_Logo%20%282%29.png" alt="HomeProof" className="h-24 w-auto scale-150 origin-left"/>
             <Badge variant="outline" className="ml-2 capitalize">{profile?.role === 'landlord' ? t('landlord', lang) : t('tenant', lang)}</Badge>
           </div>
           <div className="flex items-center gap-2">
