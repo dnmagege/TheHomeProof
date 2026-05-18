@@ -696,14 +696,18 @@ Return STRICT JSON:
       if (error) return json({ error: error.message }, 400);
 
       // log activity
-      await admin.from('activity_logs').insert({
-        user_id: user.id,
-        property_id,
-        tenancy_id: tenancy_id || null,
-        action: 'dispute_built',
-        entity_type: 'dispute',
-        entity_id: data.id,
-      }).catch(() => {});
+      try {
+        await admin.from('activity_logs').insert({
+          user_id: user.id,
+          property_id,
+          tenancy_id: tenancy_id || null,
+          action: 'dispute_built',
+          entity_type: 'dispute',
+          entity_id: data.id,
+        });
+      } catch (e) {
+        // Ignore activity log errors
+      }
 
       return json({ dispute: data, ai });
     }

@@ -282,7 +282,7 @@ backend:
 
   - task: "AI Dispute Evidence Builder"
     implemented: true
-    working: false
+    working: true
     file: "app/api/[[...path]]/route.js"
     stuck_count: 0
     priority: "high"
@@ -294,10 +294,13 @@ backend:
       - working: false
         agent: "testing"
         comment: "❌ BLOCKED: Supabase schema not set up. Error: 'Could not find the table public.disputes in the schema cache'. USER MUST RUN /app/supabase_schema_addendum.sql in Supabase SQL Editor to create disputes, activity_logs, subscription_plans, user_settings tables. Code implementation is correct - tested signup, auth, property creation, inventory generation (all working). Only dispute creation fails due to missing table."
+      - working: true
+        agent: "testing"
+        comment: "✅ PASSED: AI Dispute Evidence Builder working with REAL OpenAI GPT-4o API after SQL addendum was run. Fixed minor code bug (.catch() chaining issue on activity_logs insert). Tested complete flow: (1) Signup landlord ✅ (2) Get auth token ✅ (3) Create property ✅ (4) POST /api/disputes/build returns 200 with dispute and ai objects ✅. All required AI keys present: executive_summary, strongest_evidence[], weaknesses[], missing_evidence[], recommended_arguments{tenant[], landlord[]}, suggested_settlement, tribunal_or_court_advice, drafted_statement. Response time: 15.2s. Dispute stored in database with ai_evidence_bundle."
 
   - task: "GET /api/disputes"
     implemented: true
-    working: false
+    working: true
     file: "app/api/[[...path]]/route.js"
     stuck_count: 0
     priority: "high"
@@ -309,6 +312,9 @@ backend:
       - working: false
         agent: "testing"
         comment: "❌ BLOCKED: Cannot test - disputes table does not exist. Same issue as disputes/build endpoint. Requires /app/supabase_schema_addendum.sql to be run."
+      - working: true
+        agent: "testing"
+        comment: "✅ PASSED: GET /api/disputes working correctly after SQL addendum. Returns 200 with disputes array. Properties join working - each dispute includes properties object with address_line1. Role-based scoping working - landlord sees disputes for their properties. Tested with dispute created in same test session - dispute found in list with correct property data."
 
   - task: "HomeProof Rebrand - Tagline"
     implemented: true
@@ -534,3 +540,37 @@ agent_communication:
       - Error message clearly indicates schema issue, not code bug
       
       All working features are production-ready. Rate limiters functioning correctly.
+
+  - agent: "testing"
+    message: |
+      ✅ DISPUTE ENDPOINTS RE-TEST COMPLETE - ALL TESTS PASSED (2/2 - 100%)
+      
+      User confirmed SQL addendum was run. Re-tested dispute endpoints:
+      
+      ✅ POST /api/disputes/build (REAL OpenAI GPT-4o, NOT MOCKED):
+         - Fixed code bug: .catch() chaining issue on activity_logs insert (line 699-706)
+         - Tested complete flow: signup → auth → property → dispute build
+         - Returns 200 with dispute and ai objects
+         - All required AI keys present and correctly structured:
+           * executive_summary (string)
+           * strongest_evidence (array)
+           * weaknesses (array)
+           * missing_evidence (array)
+           * recommended_arguments (object with tenant[] and landlord[] arrays)
+           * suggested_settlement (string)
+           * tribunal_or_court_advice (string)
+           * drafted_statement (string)
+         - Response time: 15.2s
+         - Dispute stored in database with ai_evidence_bundle
+      
+      ✅ GET /api/disputes:
+         - Returns 200 with disputes array
+         - Properties join working (address_line1 present)
+         - Role-based scoping working (landlord sees their properties' disputes)
+         - Dispute created in test found in list
+      
+      🔧 MINOR FIX APPLIED:
+         Changed activity_logs insert from .catch() chaining to try-catch block.
+         This was causing 500 error. Now working correctly.
+      
+      All dispute endpoints are production-ready. No critical issues found.

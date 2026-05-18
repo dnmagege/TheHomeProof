@@ -12,7 +12,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
-import { Building2, Sparkles, FileText, Camera, Wrench, ShieldCheck, LogOut, Plus, Loader2, ArrowRight, CheckCircle2, AlertTriangle, ScanSearch, Home, ChevronLeft, Upload, Send, Trash2, Calendar, Mail, TrendingUp, Bot } from 'lucide-react';
+import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
+import { Building2, Sparkles, FileText, Camera, Wrench, ShieldCheck, LogOut, Plus, Loader2, ArrowRight, CheckCircle2, AlertTriangle, ScanSearch, Home, ChevronLeft, Upload, Send, Trash2, Calendar, Mail, TrendingUp, Bot, Menu } from 'lucide-react';
 import { t, detectLocale, saveLocale, formatCurrency } from '@/lib/i18n';
 import { useLocaleState, ThemeToggle, SettingsDialog, AIRentEstimator, AICoPilot, AIDisputeBuilder, PrintInventoryButton } from '@/lib/features';
 
@@ -55,7 +56,7 @@ function Landing({ onGetStarted, loc, updateLoc }) {
           <div className="flex items-center gap-2">
             <img src="https://customer-assets.emergentagent.com/job_next-supa-stack/artifacts/kkg2riq0_Logo%20%282%29.png" alt="HomeProof" className="h-24 w-auto scale-150 origin-left"/>
           </div>
-          <div className="hidden md:flex items-center gap-6 text-sm font-medium text-slate-700 dark:text-slate-300">
+          <div className="hidden lg:flex items-center gap-6 text-sm font-medium text-slate-700 dark:text-slate-300">
             <a href="#features" className="hover:text-brand-600 transition-colors">Features</a>
             <a href="#how" className="hover:text-brand-600 transition-colors">How it works</a>
             <a href="#pricing" className="hover:text-brand-600 transition-colors">Pricing</a>
@@ -63,10 +64,34 @@ function Landing({ onGetStarted, loc, updateLoc }) {
             <a href="#about" className="hover:text-brand-600 transition-colors">About</a>
             <a href="#faq" className="hover:text-brand-600 transition-colors">FAQ</a>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="hidden md:flex items-center gap-2">
             <SettingsDialog loc={loc} onUpdate={updateLoc}/>
             <ThemeToggle/>
             <Button onClick={onGetStarted} className="bg-brand-500 hover:bg-brand-600 text-white">{t('getStarted', lang)} <ArrowRight className="ml-2 h-4 w-4"/></Button>
+          </div>
+          {/* Mobile menu */}
+          <div className="md:hidden flex items-center gap-2">
+            <ThemeToggle/>
+            <Sheet>
+              <SheetTrigger asChild>
+                <Button variant="outline" size="icon"><Menu className="h-5 w-5"/></Button>
+              </SheetTrigger>
+              <SheetContent side="right" className="w-72">
+                <div className="flex flex-col gap-5 mt-8">
+                  <img src="https://customer-assets.emergentagent.com/job_next-supa-stack/artifacts/kkg2riq0_Logo%20%282%29.png" alt="HomeProof" className="h-20 w-auto scale-150 origin-left mb-2"/>
+                  <a href="#features" className="text-base font-medium text-slate-800 dark:text-slate-200 hover:text-brand-600">Features</a>
+                  <a href="#how" className="text-base font-medium text-slate-800 dark:text-slate-200 hover:text-brand-600">How it works</a>
+                  <a href="#pricing" className="text-base font-medium text-slate-800 dark:text-slate-200 hover:text-brand-600">Pricing</a>
+                  <a href="#testimonials" className="text-base font-medium text-slate-800 dark:text-slate-200 hover:text-brand-600">Reviews</a>
+                  <a href="#about" className="text-base font-medium text-slate-800 dark:text-slate-200 hover:text-brand-600">About</a>
+                  <a href="#faq" className="text-base font-medium text-slate-800 dark:text-slate-200 hover:text-brand-600">FAQ</a>
+                  <div className="border-t pt-4 space-y-3">
+                    <SettingsDialog loc={loc} onUpdate={updateLoc}/>
+                    <Button onClick={onGetStarted} className="w-full bg-brand-500 hover:bg-brand-600 text-white">{t('getStarted', lang)} <ArrowRight className="ml-2 h-4 w-4"/></Button>
+                  </div>
+                </div>
+              </SheetContent>
+            </Sheet>
           </div>
         </div>
       </nav>
@@ -1067,11 +1092,29 @@ function Dashboard({ user, profile, onSignOut, loc, updateLoc }) {
             <img src="https://customer-assets.emergentagent.com/job_next-supa-stack/artifacts/kkg2riq0_Logo%20%282%29.png" alt="HomeProof" className="h-24 w-auto scale-150 origin-left"/>
             <Badge variant="outline" className="ml-2 capitalize">{profile?.role === 'landlord' ? t('landlord', lang) : t('tenant', lang)}</Badge>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="hidden md:flex items-center gap-2">
             <span className="text-sm text-slate-600 dark:text-slate-400 hidden sm:inline">{user.email}</span>
             <SettingsDialog loc={loc} onUpdate={updateLoc}/>
             <ThemeToggle/>
             <Button variant="outline" size="sm" onClick={onSignOut}><LogOut className="h-4 w-4 mr-1"/>{t('signOut', lang)}</Button>
+          </div>
+          <div className="md:hidden flex items-center gap-2">
+            <ThemeToggle/>
+            <Sheet>
+              <SheetTrigger asChild>
+                <Button variant="outline" size="icon"><Menu className="h-5 w-5"/></Button>
+              </SheetTrigger>
+              <SheetContent side="right" className="w-72">
+                <div className="flex flex-col gap-4 mt-8">
+                  <div className="text-sm text-slate-700 dark:text-slate-300 truncate">{user.email}</div>
+                  <Badge variant="outline" className="w-fit capitalize">{profile?.role}</Badge>
+                  <div className="border-t pt-4 space-y-3">
+                    <SettingsDialog loc={loc} onUpdate={updateLoc}/>
+                    <Button variant="outline" className="w-full" onClick={onSignOut}><LogOut className="h-4 w-4 mr-1"/>{t('signOut', lang)}</Button>
+                  </div>
+                </div>
+              </SheetContent>
+            </Sheet>
           </div>
         </div>
       </nav>
