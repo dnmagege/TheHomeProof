@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getSupabaseAdmin, getUserFromRequest } from '@/lib/supabaseAdmin';
 import OpenAI from 'openai';
-import sgMail from '@sendgrid/mail';
 import Stripe from 'stripe';
 
 export const runtime = 'nodejs';
@@ -9,6 +8,33 @@ export const maxDuration = 60;
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 const stripe = process.env.STRIPE_SECRET_KEY ? new Stripe(process.env.STRIPE_SECRET_KEY, { apiVersion: '2022-11-15' }) : null;
+const resendApiKey = process.env.RESEND_API_KEY;
+const resendFromEmail = process.env.RESEND_FROM_EMAIL || 'no-reply@thehomeproof.co.uk';
+
+async function sendEmailWithResend({ to, from, replyTo, subject, text, html }) {
+  if (!resendApiKey) throw new Error('Resend API key not configured');
+  const payload = {
+    from,
+    to,
+    subject,
+    text,
+    html,
+  };
+  if (replyTo) payload.reply_to = replyTo;
+  const res = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${resendApiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const errorBody = await res.text();
+    throw new Error(`Resend API error: ${res.status} ${errorBody}`);
+  }
+  return res.json();
+}
 
 function getAppBaseUrl() {
   return process.env.NEXT_PUBLIC_BASE_URL || process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
@@ -79,10 +105,6 @@ async function syncStripeSubscription(admin, subscription) {
   }, { onConflict: 'user_id' });
 
   return userId;
-}
-
-if (process.env.SENDGRID_API_KEY) {
-  sgMail.setApiKey(process.env.SENDGRID_API_KEY);
 }
 
 // ---------------- RATE LIMITER (in-memory sliding window) ----------------
@@ -665,7 +687,7 @@ async function handle(request, { params }) {
       return json({ ok: true });
     }
 
-    // ===== SEND ISSUE EMAIL VIA SENDGRID =====
+    // ===== SEND ISSUE EMAIL VIA RESEND =====
     const sendIssueMatch = path.match(/^issues\/([^/]+)\/send$/);
     if (sendIssueMatch && method === 'POST') {
       const issueId = sendIssueMatch[1];
@@ -680,21 +702,20 @@ async function handle(request, { params }) {
       let draft;
       try { draft = JSON.parse(issue.ai_drafted_message); } catch { return json({ error: 'Invalid AI draft' }, 400); }
 
-      if (!process.env.SENDGRID_API_KEY) return json({ error: 'SendGrid not configured' }, 500);
+      if (!resendApiKey) return json({ error: 'Email provider not configured' }, 500);
 
       try {
-        await sgMail.send({
+        await sendEmailWithResend({
           to: recipientEmail,
-          from: process.env.SENDGRID_FROM_EMAIL || 'noreply@example.com',
+          from: resendFromEmail,
           replyTo: user.email,
           subject: draft.subject || `Issue: ${issue.title}`,
           text: draft.body || issue.description || '',
-          html: `<p>${(draft.body || issue.description || '').replace(/\n/g, '<br/>')}</p><p><em>Sent via TenantAI on behalf of ${user.email}</em></p>`,
+          html: `<p>${(draft.body || issue.description || '').replace(/\n/g, '<br/>')}</p><p><em>Sent via HomeProof on behalf of ${user.email}</em></p>`,
         });
       } catch (e) {
-        console.error('SendGrid error', e?.response?.body || e);
-        const errorDetail = e?.response?.body?.errors?.[0]?.message || e.message || 'unknown';
-        return json({ error: 'Failed to send email: ' + errorDetail }, 500);
+        console.error('Resend error', e);
+        return json({ error: 'Failed to send email: ' + (e.message || 'unknown') }, 500);
       }
 
       await admin.from('notifications').insert({
@@ -868,6 +889,13 @@ Return STRICT JSON:
       const { data, error } = await q;
       if (error) return json({ error: error.message }, 500);
       return json({ disputes: data });
+    }
+
+    // ===== USER PLAN (for feature gating) =====
+    if (path === 'user/plan' && method === 'GET') {
+      const { data: sub } = await admin.from('user_subscriptions').select('plan_id').eq('user_id', user.id).maybeSingle();
+      const plan = sub?.plan_id || 'free';
+      return json({ plan });
     }
 
     // ===== AI: TENANCY CO-PILOT CHAT =====

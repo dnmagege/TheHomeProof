@@ -41,12 +41,33 @@ export function SettingsDialog({ loc, onUpdate }) {
   const { theme, setTheme } = useTheme();
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState(loc);
+  const [loadingPortal, setLoadingPortal] = useState(false);
   useEffect(() => setDraft(loc), [loc, open]);
 
   function save() {
     onUpdate({ language: draft.language, currency: draft.currency });
     toast.success('Settings saved');
     setOpen(false);
+  }
+
+  async function openStripePortal() {
+    setLoadingPortal(true);
+    try {
+      const supabase = (await import('@/lib/supabaseClient')).getSupabaseClient();
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) { toast.error('Please sign in first'); return; }
+      const res = await fetch('/api/stripe/customer-portal', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+      });
+      const { url, error } = await res.json();
+      if (error) throw new Error(error);
+      window.location.href = url;
+    } catch (e) {
+      toast.error(e.message || 'Failed to open portal');
+    } finally {
+      setLoadingPortal(false);
+    }
   }
 
   return (
@@ -85,6 +106,11 @@ export function SettingsDialog({ loc, onUpdate }) {
                 <SelectItem value="system">{t('system', loc.language)}</SelectItem>
               </SelectContent>
             </Select>
+          </div>
+          <div>
+            <Button onClick={openStripePortal} className="w-full bg-brand-500 hover:bg-brand-600 text-white" disabled={loadingPortal}>
+              {loadingPortal ? 'Loading…' : 'Manage subscription'}
+            </Button>
           </div>
         </div>
         <DialogFooter>

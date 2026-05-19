@@ -19,6 +19,27 @@ import { useLocaleState, ThemeToggle, SettingsDialog, AIRentEstimator, AICoPilot
 
 const supabase = getSupabaseClient();
 
+// Hook to fetch user's current subscription plan
+function useUserPlan() {
+  const [plan, setPlan] = useState('free');
+  useEffect(() => {
+    (async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) return;
+        const res = await fetch('/api/user/plan', {
+          headers: { Authorization: `Bearer ${session.access_token}` },
+        });
+        const { plan: userPlan } = await res.json();
+        if (userPlan) setPlan(userPlan);
+      } catch (e) {
+        console.error('Failed to fetch user plan:', e);
+      }
+    })();
+  }, []);
+  return plan;
+}
+
 async function api(path, opts = {}) {
   const { data: { session } } = await supabase.auth.getSession();
   const token = session?.access_token;
@@ -49,6 +70,7 @@ async function uploadToBucket(bucket, file) {
 
 function Landing({ onGetStarted, loc, updateLoc }) {
   const lang = loc.language;
+  const plan = useUserPlan();
   return (
     <div className="min-h-screen bg-gradient-to-b from-slate-50 to-white dark:from-slate-950 dark:to-slate-900">
       <nav className="border-b border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/80 backdrop-blur sticky top-0 z-30">
@@ -198,7 +220,41 @@ function Landing({ onGetStarted, loc, updateLoc }) {
                 </CardHeader>
                 <CardContent>
                   <ul className="space-y-2 mb-6">{p.features.map((f, j) => <li key={j} className="flex gap-2 text-sm text-slate-700 dark:text-slate-300"><CheckCircle2 className="h-4 w-4 text-brand-500 flex-shrink-0 mt-0.5"/>{f}</li>)}</ul>
-                  <Button onClick={onGetStarted} className={`w-full ${p.highlight ? 'bg-brand-500 hover:bg-brand-600 text-white' : ''}`} variant={p.highlight ? 'default' : 'outline'}>{p.cta}</Button>
+                  {p.name === 'Pro' ? (
+                    <Button
+                      onClick={async () => {
+                        try {
+                          const { data: { session } } = await supabase.auth.getSession();
+                          if (!session) { toast.error('Please sign in first'); return; }
+                          const res = await fetch('/api/stripe/create-checkout-session', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+                            body: JSON.stringify({ priceId: process.env.NEXT_PUBLIC_STRIPE_PRICE_PRO })
+                          });
+                          const { url, error } = await res.json();
+                          if (error) throw new Error(error);
+                          window.location.href = url;
+                        } catch (e) {
+                          toast.error(e.message || 'Failed to start checkout');
+                        }
+                      }}
+                      className={`w-full bg-brand-500 hover:bg-brand-600 text-white`}
+                    >
+                      {p.cta}
+                    </Button>
+                  ) : p.name === 'Business' ? (
+                    <Button
+                      onClick={() => {
+                        window.location.href = 'mailto:thehomeproof@outlook.com?subject=Business%20Plan%20Enquiry';
+                      }}
+                      className="w-full"
+                      variant="outline"
+                    >
+                      {p.cta}
+                    </Button>
+                  ) : (
+                    <Button onClick={onGetStarted} className="w-full" variant="outline">{p.cta}</Button>
+                  )}
                 </CardContent>
               </Card>
             ))}
@@ -1022,7 +1078,7 @@ function IssuesTab({ properties, profile }) {
                           <DialogHeader><DialogTitle>Send issue email</DialogTitle></DialogHeader>
                           <div className="space-y-3">
                             <div><Label>Recipient email</Label><Input type="email" value={sendTo} onChange={(e)=>setSendTo(e.target.value)} placeholder="landlord@example.com"/></div>
-                            <p className="text-xs text-slate-500">The AI-drafted email below will be sent via SendGrid with reply-to set to your email.</p>
+                            <p className="text-xs text-slate-500">The AI-drafted email below will be sent via Resend with reply-to set to your email.</p>
                           </div>
                           <DialogFooter><Button onClick={()=>sendEmail(i.id)} disabled={!sendTo} className="bg-emerald-600 hover:bg-emerald-700"><Send className="h-3 w-3 mr-1"/>Send</Button></DialogFooter>
                         </DialogContent>

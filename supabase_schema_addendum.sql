@@ -62,7 +62,7 @@ create table if not exists public.email_logs (
   body text,
   related_entity_type text,
   related_entity_id uuid,
-  provider text default 'sendgrid',
+  provider text default 'resend',
   provider_message_id text,
   status text default 'sent',
   error_message text,
