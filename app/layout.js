@@ -6,7 +6,7 @@ export const metadata = {
   title: 'HomeProof — Proof for every part of your tenancy',
   description: 'AI-powered tenancy management: inventories, contract reading, damage detection, dispute evidence, and compliance for landlords & tenants worldwide.',
   icons: {
-    icon: 'https://customer-assets.emergentagent.com/job_next-supa-stack/artifacts/kkg2riq0_Logo%20%282%29.png',
+    icon: '/favicon.png',
   },
 }
 

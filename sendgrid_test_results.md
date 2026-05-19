@@ -1,7 +1,7 @@
 # SendGrid Email Sending Test Results
 
 **Test Date:** 2026-05-17T20:25:01  
-**Base URL:** https://next-supa-stack.preview.emergentagent.com/api  
+**Base URL:** http://localhost:3000/api  
 **Verified Sender:** thehomeproof@outlook.com  
 
 ## Test Summary

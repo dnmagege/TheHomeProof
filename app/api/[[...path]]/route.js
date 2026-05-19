@@ -2,11 +2,84 @@ import { NextResponse } from 'next/server';
 import { getSupabaseAdmin, getUserFromRequest } from '@/lib/supabaseAdmin';
 import OpenAI from 'openai';
 import sgMail from '@sendgrid/mail';
+import Stripe from 'stripe';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+const stripe = process.env.STRIPE_SECRET_KEY ? new Stripe(process.env.STRIPE_SECRET_KEY, { apiVersion: '2022-11-15' }) : null;
+
+function getAppBaseUrl() {
+  return process.env.NEXT_PUBLIC_BASE_URL || process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+}
+
+function getPlanFromPriceId(priceId) {
+  if (!priceId) return null;
+  if (priceId === process.env.STRIPE_PRICE_PRO_MONTHLY || priceId === process.env.NEXT_PUBLIC_STRIPE_PRICE_PRO) return 'pro';
+  if (priceId === process.env.STRIPE_PRICE_BUSINESS_MONTHLY || priceId === process.env.NEXT_PUBLIC_STRIPE_PRICE_BUSINESS) return 'business';
+  if (priceId === process.env.STRIPE_PRICE_FREE) return 'free';
+  return null;
+}
+
+async function ensureStripeCustomer(admin, user) {
+  const { data: existing } = await admin.from('user_subscriptions').select('stripe_customer_id').eq('user_id', user.id).maybeSingle();
+  if (existing?.stripe_customer_id) return existing.stripe_customer_id;
+  if (!stripe) throw new Error('Stripe not configured');
+  const customer = await stripe.customers.create({
+    email: user.email,
+    metadata: { supabase_user_id: user.id },
+  });
+  await admin.from('user_subscriptions').upsert({
+    user_id: user.id,
+    stripe_customer_id: customer.id,
+    plan_id: 'free',
+    status: 'active',
+  }, { onConflict: 'user_id' });
+  return customer.id;
+}
+
+async function syncStripeSubscription(admin, subscription) {
+  if (!subscription) return null;
+  const customerId = subscription.customer;
+  const stripeSubId = subscription.id;
+  const priceId = subscription.items?.data?.[0]?.price?.id;
+  const planId = getPlanFromPriceId(priceId) || 'free';
+  const status = subscription.status || 'active';
+  const currentPeriodEnd = subscription.current_period_end ? new Date(subscription.current_period_end * 1000).toISOString() : null;
+  const cancelAtPeriodEnd = !!subscription.cancel_at_period_end;
+  const userIdFromMetadata = subscription.metadata?.supabase_user_id;
+
+  let userId = null;
+  if (customerId) {
+    const { data: byCustomer } = await admin.from('user_subscriptions').select('user_id').eq('stripe_customer_id', customerId).maybeSingle();
+    userId = byCustomer?.user_id;
+  }
+  if (!userId && stripeSubId) {
+    const { data: bySub } = await admin.from('user_subscriptions').select('user_id').eq('stripe_subscription_id', stripeSubId).maybeSingle();
+    userId = bySub?.user_id;
+  }
+  if (!userId && userIdFromMetadata) {
+    userId = userIdFromMetadata;
+  }
+
+  if (!userId) {
+    console.warn('Stripe subscription sync skipped: no matching user found', { stripeSubId, customerId });
+    return null;
+  }
+
+  await admin.from('user_subscriptions').upsert({
+    user_id: userId,
+    stripe_customer_id: customerId,
+    stripe_subscription_id: stripeSubId,
+    plan_id: planId,
+    status,
+    current_period_end: currentPeriodEnd,
+    cancel_at_period_end: cancelAtPeriodEnd,
+  }, { onConflict: 'user_id' });
+
+  return userId;
+}
 
 if (process.env.SENDGRID_API_KEY) {
   sgMail.setApiKey(process.env.SENDGRID_API_KEY);
@@ -203,6 +276,39 @@ async function handle(request, { params }) {
   }
 
   try {
+    // Public: Stripe webhook
+    if (path === 'stripe/webhook' && method === 'POST') {
+      if (!stripe || !process.env.STRIPE_WEBHOOK_SECRET) return json({ error: 'Stripe webhook not configured' }, 500);
+      const payload = await request.text();
+      const signature = request.headers.get('stripe-signature') || '';
+      let event;
+      try {
+        event = stripe.webhooks.constructEvent(payload, signature, process.env.STRIPE_WEBHOOK_SECRET);
+      } catch (err) {
+        return json({ error: 'Webhook signature verification failed: ' + (err.message || err) }, 400);
+      }
+      const admin = getSupabaseAdmin();
+      if (event.type === 'checkout.session.completed') {
+        const session = event.data.object;
+        if (session.subscription) {
+          const subscription = await stripe.subscriptions.retrieve(session.subscription, { expand: ['items.data.price'] });
+          await syncStripeSubscription(admin, subscription);
+        }
+      }
+      if (event.type.startsWith('customer.subscription.')) {
+        const subscription = event.data.object;
+        await syncStripeSubscription(admin, subscription);
+      }
+      if (event.type === 'invoice.paid') {
+        const invoice = event.data.object;
+        if (invoice.subscription) {
+          const subscription = await stripe.subscriptions.retrieve(invoice.subscription, { expand: ['items.data.price'] });
+          await syncStripeSubscription(admin, subscription);
+        }
+      }
+      return json({ received: true });
+    }
+
     // Public: health check
     if (path === '' || path === 'root') {
       return json({ message: 'AI Tenancy Manager API ready', timestamp: new Date().toISOString() });
@@ -228,6 +334,42 @@ async function handle(request, { params }) {
     const auth = await getUserFromRequest(request);
     if (auth.error) return json({ error: auth.error }, auth.status);
     const { user, profile, admin } = auth;
+
+    // ===== STRIPE: create checkout session =====
+    if (path === 'stripe/create-checkout-session' && method === 'POST') {
+      if (!stripe) return json({ error: 'Stripe not configured' }, 500);
+      const body = await request.json();
+      const { price_id } = body;
+      if (!price_id) return json({ error: 'price_id required' }, 400);
+      const allowedPrices = [process.env.STRIPE_PRICE_PRO_MONTHLY, process.env.STRIPE_PRICE_BUSINESS_MONTHLY];
+      if (!allowedPrices.includes(price_id)) return json({ error: 'Invalid price_id' }, 400);
+      const customerId = await ensureStripeCustomer(admin, user);
+      const baseUrl = getAppBaseUrl();
+      const session = await stripe.checkout.sessions.create({
+        customer: customerId,
+        payment_method_types: ['card'],
+        mode: 'subscription',
+        line_items: [{ price: price_id, quantity: 1 }],
+        success_url: `${baseUrl}/?checkout=success`,
+        cancel_url: `${baseUrl}/?checkout=cancel`,
+        subscription_data: {
+          metadata: { supabase_user_id: user.id },
+        },
+      });
+      return json({ sessionId: session.id, url: session.url });
+    }
+
+    if (path === 'stripe/customer-portal' && method === 'POST') {
+      if (!stripe) return json({ error: 'Stripe not configured' }, 500);
+      const { data: subscription } = await admin.from('user_subscriptions').select('stripe_customer_id').eq('user_id', user.id).maybeSingle();
+      if (!subscription?.stripe_customer_id) return json({ error: 'No Stripe customer found for user' }, 404);
+      const baseUrl = getAppBaseUrl();
+      const portal = await stripe.billingPortal.sessions.create({
+        customer: subscription.stripe_customer_id,
+        return_url: `${baseUrl}/settings`,
+      });
+      return json({ url: portal.url });
+    }
 
     // ===== PROFILE =====
     if (path === 'me' && method === 'GET') {

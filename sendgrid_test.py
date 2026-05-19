@@ -12,7 +12,7 @@ import string
 from datetime import datetime
 
 # Configuration
-BASE_URL = "https://next-supa-stack.preview.emergentagent.com/api"
+BASE_URL = "http://localhost:3000/api"
 SUPABASE_URL = "https://bpqmnxbkgilinfgqehpo.supabase.co"
 ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJwcW1ueGJrZ2lsaW5mZ3FlaHBvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg4NjgzODEsImV4cCI6MjA5NDQ0NDM4MX0.L0OemMdLdHQ-R9L_NCu8jrUbCoktJAYU2i3Mwn4SQEM"
 VERIFIED_SENDER = "thehomeproof@outlook.com"

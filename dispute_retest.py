@@ -10,7 +10,7 @@ import random
 import string
 import json
 
-BASE_URL = "https://next-supa-stack.preview.emergentagent.com/api"
+BASE_URL = "http://localhost:3000/api"
 
 def random_email():
     """Generate random email for testing"""
