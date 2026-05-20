@@ -68,7 +68,7 @@ async function uploadToBucket(bucket, file) {
   return { path: filePath, url: data.publicUrl };
 }
 
-function Landing({ onGetStarted, loc, updateLoc }) {
+function Landing({ onGetStarted, onSignIn, loc, updateLoc }) {
   const lang = loc.language;
   const plan = useUserPlan();
   return (
@@ -110,6 +110,7 @@ function Landing({ onGetStarted, loc, updateLoc }) {
                   <div className="border-t pt-4 space-y-3">
                     <SettingsDialog loc={loc} onUpdate={updateLoc}/>
                     <Button onClick={onGetStarted} className="w-full bg-brand-500 hover:bg-brand-600 text-white">{t('getStarted', lang)} <ArrowRight className="ml-2 h-4 w-4"/></Button>
+                    <Button onClick={onSignIn} className="w-full" variant="outline">{t('signIn', lang)}</Button>
                   </div>
                 </div>
               </SheetContent>
@@ -128,7 +129,7 @@ function Landing({ onGetStarted, loc, updateLoc }) {
             <p className="mt-6 text-lg text-slate-600 dark:text-slate-400 max-w-xl">{t('landingSubtitle', lang)}</p>
             <div className="mt-8 flex flex-col sm:flex-row gap-3">
               <Button onClick={onGetStarted} size="lg" className="bg-brand-500 hover:bg-brand-600">{t('startFree', lang)} <ArrowRight className="ml-2 h-4 w-4"/></Button>
-              <Button onClick={onGetStarted} variant="outline" size="lg">{t('signIn', lang)}</Button>
+              <Button onClick={onSignIn} variant="outline" size="lg">{t('signIn', lang)}</Button>
             </div>
             <div className="mt-10 grid grid-cols-3 gap-6">
               {[{n:'30s', l:t('aiInventory', lang)},{n:'1-click', l:t('aiContract', lang)},{n:'24/7', l:t('aiCopilot', lang)}].map((s,i)=>(
@@ -229,7 +230,7 @@ function Landing({ onGetStarted, loc, updateLoc }) {
                           const res = await fetch('/api/stripe/create-checkout-session', {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
-                            body: JSON.stringify({ priceId: process.env.NEXT_PUBLIC_STRIPE_PRICE_PRO })
+                            body: JSON.stringify({ price_id: process.env.NEXT_PUBLIC_STRIPE_PRICE_PRO })
                           });
                           const { url, error } = await res.json();
                           if (error) throw new Error(error);
@@ -379,6 +380,13 @@ function AuthPage({ mode, setMode, onSuccess, onBack, loc }) {
         if (siErr) throw siErr;
         toast.success('Welcome to HomeProof!');
         onSuccess();
+      } else if (mode === 'forgot') {
+        const { error } = await supabase.auth.resetPasswordForEmail(email, {
+          redirectTo: typeof window !== 'undefined' ? `${window.location.origin}/reset-password` : undefined,
+        });
+        if (error) throw error;
+        toast.success('Password reset email sent. Check your inbox.');
+        setMode('login');
       } else {
         const { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
@@ -424,18 +432,27 @@ function AuthPage({ mode, setMode, onSuccess, onBack, loc }) {
                 <Label htmlFor="email">{t('email', lang)}</Label>
                 <Input id="email" type="email" value={email} onChange={(e)=>setEmail(e.target.value)} required/>
               </div>
-              <div>
-                <Label htmlFor="password">{t('password', lang)}</Label>
-                <Input id="password" type="password" minLength={6} value={password} onChange={(e)=>setPassword(e.target.value)} required/>
-              </div>
+              {mode !== 'forgot' && (
+                <div>
+                  <Label htmlFor="password">{t('password', lang)}</Label>
+                  <Input id="password" type="password" minLength={6} value={password} onChange={(e)=>setPassword(e.target.value)} required/>
+                  {mode === 'login' && (
+                    <button type="button" onClick={() => window.location.href = '/reset-password'} className="mt-2 text-sm text-brand-600 hover:underline">
+                      Forgot password?
+                    </button>
+                  )}
+                </div>
+              )}
               <Button type="submit" className="w-full bg-brand-500 hover:bg-brand-600" disabled={loading}>
-                {loading ? <Loader2 className="h-4 w-4 animate-spin"/> : (mode === 'signup' ? t('signUp', lang) : t('signIn', lang))}
+                {loading ? <Loader2 className="h-4 w-4 animate-spin"/> : (
+                  mode === 'signup' ? t('signUp', lang) : mode === 'forgot' ? 'Send reset link' : t('signIn', lang)
+                )}
               </Button>
             </form>
             <p className="mt-4 text-sm text-center text-slate-600 dark:text-slate-400">
-              {mode === 'signup' ? 'Already have an account?' : "Don't have an account?"}{' '}
-              <button onClick={()=>setMode(mode==='signup'?'login':'signup')} className="text-brand-600 hover:underline font-medium">
-                {mode === 'signup' ? t('signIn', lang) : t('signUp', lang)}
+              {mode === 'signup' ? 'Already have an account?' : mode === 'forgot' ? 'Remembered your password?' : "Don't have an account?"}{' '}
+              <button onClick={() => setMode(mode === 'signup' ? 'login' : mode === 'forgot' ? 'login' : 'signup')} className="text-brand-600 hover:underline font-medium">
+                {mode === 'signup' ? t('signIn', lang) : mode === 'forgot' ? t('signIn', lang) : t('signUp', lang)}
               </button>
             </p>
           </CardContent>
@@ -1114,7 +1131,17 @@ function Dashboard({ user, profile, onSignOut, loc, updateLoc }) {
   const lang = loc?.language || 'en';
   const [properties, setProperties] = useState([]);
   const [stats, setStats] = useState({ properties: 0, tenancies: 0, openIssues: 0, expiringCompliance: 0 });
+  const [planInfo, setPlanInfo] = useState(null);
   const [loading, setLoading] = useState(true);
+
+  const loadPlanInfo = useCallback(async () => {
+    try {
+      const plan = await api('user/plan');
+      setPlanInfo(plan);
+    } catch (e) {
+      console.error('Failed to load plan info', e);
+    }
+  }, []);
 
   const loadAll = useCallback(async () => {
     try {
@@ -1138,7 +1165,7 @@ function Dashboard({ user, profile, onSignOut, loc, updateLoc }) {
     } catch (e) { toast.error(e.message); }
     setLoading(false);
   }, []);
-  useEffect(() => { loadAll(); }, [loadAll]);
+  useEffect(() => { loadAll(); loadPlanInfo(); }, [loadAll, loadPlanInfo]);
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
@@ -1176,11 +1203,20 @@ function Dashboard({ user, profile, onSignOut, loc, updateLoc }) {
       </nav>
 
       <div className="container mx-auto px-6 py-8">
-        <div className="flex items-center justify-between mb-6">
+        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between mb-6">
           <div>
             <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">{t('welcome', lang)}, {profile?.name || user.email.split('@')[0]}</h1>
             <p className="text-slate-600 dark:text-slate-400 text-sm">{t('dashboardSubtitle', lang)}</p>
           </div>
+          {planInfo && (
+            <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white/90 dark:bg-slate-900/90 px-4 py-3 shadow-sm text-sm text-slate-700 dark:text-slate-200">
+              <div className="font-semibold text-slate-900 dark:text-slate-100">Plan: {planInfo.plan}</div>
+              <div className="mt-1 grid grid-cols-1 gap-1 sm:grid-cols-2 text-xs text-slate-600 dark:text-slate-400">
+                <div>Properties: {properties.length}/{planInfo.max_properties ?? '∞'}</div>
+                <div>AI runs: {planInfo.ai_runs_used_this_month}/{planInfo.max_ai_runs_per_month ?? '∞'} this month</div>
+              </div>
+            </div>
+          )}
         </div>
 
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
@@ -1269,7 +1305,7 @@ function App() {
   async function signOut() { await supabase.auth.signOut(); }
 
   if (view === 'loading') return <div className="min-h-screen flex items-center justify-center"><Loader2 className="h-6 w-6 animate-spin text-brand-600"/></div>;
-  if (view === 'landing') return <Landing loc={loc} updateLoc={updateLoc} onGetStarted={()=>{setAuthMode('signup'); setView('auth');}}/>;
+  if (view === 'landing') return <Landing loc={loc} updateLoc={updateLoc} onGetStarted={()=>{setAuthMode('signup'); setView('auth');}} onSignIn={()=>{setAuthMode('login'); setView('auth');}}/>;
   if (view === 'auth') return <AuthPage loc={loc} mode={authMode} setMode={setAuthMode} onSuccess={loadProfile} onBack={()=>setView('landing')}/>;
   if (view === 'dashboard' && user) return <Dashboard loc={loc} updateLoc={updateLoc} user={user} profile={profile} onSignOut={signOut}/>;
   return null;
