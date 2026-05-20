@@ -45,8 +45,13 @@ export default function ResetPasswordForm() {
 
     try {
       if (mode === 'request') {
-        const { error } = await supabase.auth.resetPasswordForEmail(email, {
-          redirectTo: typeof window !== 'undefined' ? `${window.location.origin}/reset-password` : undefined,
+        const resetUrl = typeof window !== 'undefined'
+          ? process.env.NEXT_PUBLIC_RESET_PASSWORD_URL || `${window.location.origin}/reset-password`
+          : undefined;
+        const trimmedEmail = email.trim();
+        if (!trimmedEmail) throw new Error('Please enter the email address for your account.');
+        const { error } = await supabase.auth.resetPasswordForEmail(trimmedEmail, {
+          redirectTo: resetUrl,
         });
         if (error) throw error;
         setMessage('Password reset email sent. Check your inbox.');
@@ -58,7 +63,8 @@ export default function ResetPasswordForm() {
         setMessage('Password updated successfully. You can now sign in.');
       }
     } catch (err) {
-      toast.error(err?.message || 'Unable to process your request.');
+      const message = err?.message || err?.error_description || err?.msg || JSON.stringify(err);
+      toast.error(message || 'Unable to process your request.');
     } finally {
       setLoading(false);
     }

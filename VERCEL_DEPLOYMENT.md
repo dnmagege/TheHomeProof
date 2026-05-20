@@ -22,6 +22,7 @@ After the initial deploy, go to **Settings > Environment Variables** and add:
 
 ```
 NEXT_PUBLIC_BASE_URL=https://thehomeproof.co.uk
+NEXT_PUBLIC_RESET_PASSWORD_URL=https://project-ik3xp.vercel.app/reset-password
 NEXT_PUBLIC_SUPABASE_URL=<your-supabase-url>
 NEXT_PUBLIC_SUPABASE_ANON_KEY=<your-supabase-anon-key>
 SUPABASE_SERVICE_ROLE_KEY=<your-supabase-service-role-key>
