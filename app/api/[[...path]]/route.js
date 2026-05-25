@@ -107,6 +107,113 @@ async function syncStripeSubscription(admin, subscription) {
   return userId;
 }
 
+async function resolveBillingAccount(admin, user, profile) {
+  if (profile?.role === 'tenant') {
+    const { data: tenancy, error } = await admin
+      .from('tenancies')
+      .select('landlord_id')
+      .eq('tenant_id', user.id)
+      .limit(1)
+      .maybeSingle();
+    if (!error && tenancy?.landlord_id) {
+      return tenancy.landlord_id;
+    }
+  }
+  return user.id;
+}
+
+const FREE_PLAN_INFO = {
+  id: 'free',
+  name: 'Free',
+  max_properties: 1,
+  max_ai_runs_per_month: 10,
+};
+
+function hasMonthChanged(lastResetAt) {
+  if (!lastResetAt) return true;
+  const reset = new Date(lastResetAt);
+  const now = new Date();
+  return reset.getUTCFullYear() !== now.getUTCFullYear() || reset.getUTCMonth() !== now.getUTCMonth();
+}
+
+async function getUserSubscriptionDetails(admin, userId) {
+  const { data: sub, error: subError } = await admin.from('user_subscriptions').select('*').eq('user_id', userId).maybeSingle();
+  if (subError) throw new Error(subError.message || 'Failed to load subscription');
+
+  if (!sub) {
+    const now = new Date().toISOString();
+    const { error: insertError } = await admin.from('user_subscriptions').insert({
+      user_id: userId,
+      plan_id: 'free',
+      status: 'active',
+      ai_runs_used_this_month: 0,
+      ai_runs_reset_at: now,
+    });
+    if (insertError) throw new Error(insertError.message || 'Failed to initialize subscription');
+    return { ...FREE_PLAN_INFO, plan_id: 'free', status: 'active', ai_runs_used_this_month: 0, ai_runs_reset_at: now };
+  }
+
+  const planId = sub.plan_id || 'free';
+  const { data: plan, error: planError } = await admin.from('subscription_plans').select('*').eq('id', planId).maybeSingle();
+  if (planError) throw new Error(planError.message || 'Failed to load plan');
+
+  const normalizedPlan = plan || FREE_PLAN_INFO;
+  let usage = sub.ai_runs_used_this_month || 0;
+  let resetAt = sub.ai_runs_reset_at || new Date().toISOString();
+
+  if (hasMonthChanged(resetAt)) {
+    const now = new Date().toISOString();
+    const { error: resetError } = await admin.from('user_subscriptions').update({ ai_runs_used_this_month: 0, ai_runs_reset_at: now }).eq('user_id', userId);
+    if (resetError) throw new Error(resetError.message || 'Failed to reset AI usage');
+    usage = 0;
+    resetAt = now;
+  }
+
+  return {
+    plan: normalizedPlan,
+    plan_id: planId,
+    status: sub.status || 'active',
+    stripe_customer_id: sub.stripe_customer_id,
+    stripe_subscription_id: sub.stripe_subscription_id,
+    current_period_end: sub.current_period_end,
+    cancel_at_period_end: sub.cancel_at_period_end,
+    ai_runs_used_this_month: usage,
+    ai_runs_reset_at: resetAt,
+  };
+}
+
+async function ensurePropertyCreationAllowed(admin, userId) {
+  const subDetails = await getUserSubscriptionDetails(admin, userId);
+  const maxProperties = subDetails.plan.max_properties;
+  if (typeof maxProperties === 'number') {
+    const { count, error: countError } = await admin.from('properties').select('id', { count: 'exact', head: true }).eq('landlord_id', userId);
+    if (countError) throw new Error(countError.message || 'Failed to count properties');
+    if (typeof count === 'number' && count >= maxProperties) {
+      throw new Error(`Plan limit reached: ${maxProperties} properties. Upgrade your plan to add more.`);
+    }
+  }
+}
+
+async function chargeAiRun(admin, user, profile, amount = 1) {
+  const billingUserId = await resolveBillingAccount(admin, user, profile);
+  const subDetails = await getUserSubscriptionDetails(admin, billingUserId);
+  const maxRuns = subDetails.plan.max_ai_runs_per_month;
+  if (typeof maxRuns === 'number') {
+    if (subDetails.ai_runs_used_this_month + amount > maxRuns) {
+      throw new Error(`AI usage limit exceeded. ${maxRuns} runs per month allowed on this plan.`);
+    }
+  }
+
+  const updatedUsage = (subDetails.ai_runs_used_this_month || 0) + amount;
+  const { error } = await admin.from('user_subscriptions').update({ ai_runs_used_this_month: updatedUsage }).eq('user_id', billingUserId);
+  if (error) throw new Error(error.message || 'Failed to update AI usage');
+}
+
+async function ensureAiRunAllowed(admin, user, profile) {
+  const billingUserId = await resolveBillingAccount(admin, user, profile);
+  await getUserSubscriptionDetails(admin, billingUserId);
+}
+
 // ---------------- RATE LIMITER (in-memory sliding window) ----------------
 const RATE_BUCKETS = new Map();
 function rateLimit(key, limit, windowMs) {
@@ -352,6 +459,109 @@ async function handle(request, { params }) {
       return json({ user: data.user });
     }
 
+    if (path === 'auth/recover' && method === 'POST') {
+      const body = await request.json();
+      const email = (body?.email || '').trim().toLowerCase();
+      if (!email) return json({ error: 'email required' }, 400);
+
+      const resetUrl = process.env.NEXT_PUBLIC_RESET_PASSWORD_URL || `${getAppBaseUrl()}/reset-password`;
+      const admin = getSupabaseAdmin();
+
+      console.log('[RECOVERY] POST /api/auth/recover called');
+      console.log('[RECOVERY] Email:', email);
+      console.log('[RECOVERY] NEXT_PUBLIC_RESET_PASSWORD_URL env var:', process.env.NEXT_PUBLIC_RESET_PASSWORD_URL);
+      console.log('[RECOVERY] getAppBaseUrl():', getAppBaseUrl());
+      console.log('[RECOVERY] Final resetUrl being passed to generateLink:', resetUrl);
+
+      let actionLink;
+      try {
+        console.log('[RECOVERY] Calling generateLink with:', { type: 'recovery', email, redirectTo: resetUrl });
+        const result = await admin.auth.admin.generateLink({ type: 'recovery', email, redirectTo: resetUrl });
+        console.log('[RECOVERY] Full Supabase response:', JSON.stringify(result, null, 2));
+        if (result.error) {
+          console.error('[RECOVERY] Supabase generateLink error', result.error);
+          throw new Error(result.error.message || 'Failed to generate recovery link');
+        }
+        let generatedLink = result.data?.properties?.action_link || result.data?.action_link;
+        console.log('[RECOVERY] actionLink generated from Supabase:', generatedLink);
+        
+        // Fix: Manually reconstruct the URL with proper URL encoding of redirect_to
+        if (generatedLink) {
+          const url = new URL(generatedLink);
+          console.log('[RECOVERY] Original redirect_to param:', url.searchParams.get('redirect_to'));
+          
+          // Extract the token
+          const token = url.searchParams.get('token');
+          const type = url.searchParams.get('type');
+          
+          if (token) {
+            // Manually construct the recovery link with the full reset URL properly encoded
+            const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+            const encodedRedirectTo = encodeURIComponent(resetUrl);
+            actionLink = `${supabaseUrl}/auth/v1/verify?token=${token}&type=${type}&redirect_to=${encodedRedirectTo}`;
+            console.log('[RECOVERY] Reconstructed actionLink with proper URL encoding:', actionLink);
+            
+            const newUrl = new URL(actionLink);
+            console.log('[RECOVERY] Corrected redirect_to param:', newUrl.searchParams.get('redirect_to'));
+          } else {
+            actionLink = generatedLink;
+          }
+        }
+      } catch (err) {
+        console.error('[RECOVERY] generateLink failed', err);
+        actionLink = null;
+      }
+
+      if (actionLink && resendApiKey) {
+        try {
+          console.log('[RECOVERY] Sending email via Resend...');
+          await sendEmailWithResend({
+            to: email,
+            from: resendFromEmail,
+            subject: 'HomeProof password reset',
+            text: `Reset your HomeProof password by clicking this link: ${actionLink}`,
+            html: `<p>Reset your HomeProof password by clicking the link below:</p><p><a href="${actionLink}">Reset password</a></p>`,
+          });
+          console.log('[RECOVERY] Email sent successfully via Resend');
+          return json({ success: true, source: 'resend' });
+        } catch (err) {
+          console.error('[RECOVERY] Resend send failed, attempting Supabase fallback:', err.message);
+        }
+      } else {
+        console.log('[RECOVERY] actionLink missing or no Resend API key, using Supabase fallback');
+      }
+
+      try {
+        const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+        const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+        if (!supabaseUrl || !serviceKey) {
+          return json({ error: 'Email recovery service is not fully configured' }, 500);
+        }
+        console.log('[RECOVERY] Using Supabase /auth/v1/recover fallback endpoint');
+        console.log('[RECOVERY] redirect_to being sent to Supabase:', resetUrl);
+        const response = await fetch(`${supabaseUrl}/auth/v1/recover`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${serviceKey}`,
+            apikey: serviceKey,
+          },
+          body: JSON.stringify({ email, redirect_to: resetUrl }),
+        });
+        const data = await response.json().catch(() => null);
+        if (!response.ok) {
+          const err = data?.error || data?.msg || data?.message || 'Supabase recovery failed';
+          console.error('[RECOVERY] Supabase recovery endpoint failed:', err);
+          return json({ error: err }, response.status);
+        }
+        console.log('[RECOVERY] Email sent successfully via Supabase fallback');
+        return json({ success: true, source: 'supabase' });
+      } catch (err) {
+        console.error('[RECOVERY] Supabase recover request failed:', err);
+        return json({ error: err?.message || 'Recovery email failed' }, 500);
+      }
+    }
+
     // All other endpoints require auth
     const auth = await getUserFromRequest(request);
     if (auth.error) return json({ error: auth.error }, auth.status);
@@ -361,7 +571,7 @@ async function handle(request, { params }) {
     if (path === 'stripe/create-checkout-session' && method === 'POST') {
       if (!stripe) return json({ error: 'Stripe not configured' }, 500);
       const body = await request.json();
-      const { price_id } = body;
+      const price_id = body.price_id || body.priceId;
       if (!price_id) return json({ error: 'price_id required' }, 400);
       const allowedPrices = [process.env.STRIPE_PRICE_PRO_MONTHLY, process.env.STRIPE_PRICE_BUSINESS_MONTHLY];
       if (!allowedPrices.includes(price_id)) return json({ error: 'Invalid price_id' }, 400);
@@ -416,6 +626,7 @@ async function handle(request, { params }) {
 
     if (path === 'properties' && method === 'POST') {
       if (profile?.role !== 'landlord') return json({ error: 'Only landlords can create properties' }, 403);
+      await ensurePropertyCreationAllowed(admin, user.id);
       const body = await request.json();
       const { data, error } = await admin
         .from('properties')
@@ -491,7 +702,9 @@ async function handle(request, { params }) {
       if (!property_id || !Array.isArray(photo_urls) || photo_urls.length === 0) {
         return json({ error: 'property_id and photo_urls[] are required' }, 400);
       }
+      await ensureAiRunAllowed(admin, user, profile);
       const ai = await aiInventoryFromPhotos(photo_urls);
+      await chargeAiRun(admin, user, profile);
       const { data, error } = await admin
         .from('inventories')
         .insert({
@@ -513,6 +726,7 @@ async function handle(request, { params }) {
       const file = form.get('file');
       const tenancy_id = form.get('tenancy_id');
       if (!file || !tenancy_id) return json({ error: 'file and tenancy_id required' }, 400);
+      await ensureAiRunAllowed(admin, user, profile);
       const arrayBuffer = await file.arrayBuffer();
       const buf = Buffer.from(arrayBuffer);
 
@@ -541,6 +755,7 @@ async function handle(request, { params }) {
       if (!rawText.trim()) return json({ error: 'No text extracted from document' }, 400);
 
       const ai = await aiContractParse(rawText);
+      await chargeAiRun(admin, user, profile);
       const { data: signed } = await admin.storage.from('contracts').createSignedUrl(filePath, 60 * 60 * 24);
       const { data, error } = await admin
         .from('contracts')
@@ -564,7 +779,9 @@ async function handle(request, { params }) {
       if (!tenancy_id || !raw_text) {
         return json({ error: 'tenancy_id and raw_text are required' }, 400);
       }
+      await ensureAiRunAllowed(admin, user, profile);
       const ai = await aiContractParse(raw_text);
+      await chargeAiRun(admin, user, profile);
       const { data, error } = await admin
         .from('contracts')
         .insert({
@@ -587,7 +804,9 @@ async function handle(request, { params }) {
       if (!property_id || !Array.isArray(before_urls) || !Array.isArray(after_urls)) {
         return json({ error: 'property_id, before_urls[], after_urls[] required' }, 400);
       }
+      await ensureAiRunAllowed(admin, user, profile);
       const ai = await aiCompareInspection(before_urls, after_urls);
+      await chargeAiRun(admin, user, profile);
       const { data, error } = await admin
         .from('inspections')
         .insert({
@@ -610,9 +829,11 @@ async function handle(request, { params }) {
       const { property_id, tenancy_id, title, description, photo_urls } = body;
       if (!property_id || !title) return json({ error: 'property_id and title required' }, 400);
 
+      await ensureAiRunAllowed(admin, user, profile);
       let aiDraft = null;
       try {
         aiDraft = await aiDraftIssueMessage(title, description || '', photo_urls || []);
+        await chargeAiRun(admin, user, profile);
       } catch (e) {
         console.error('AI draft failed', e);
       }
@@ -748,6 +969,7 @@ async function handle(request, { params }) {
       const body = await request.json();
       const { city, postcode, country, bedrooms, bathrooms, property_type, condition, furnishing, extra_details, currency } = body;
       if (!city || bedrooms == null) return json({ error: 'city and bedrooms required' }, 400);
+      await ensureAiRunAllowed(admin, user, profile);
       const cur = currency || 'GBP';
       const resp = await openai.chat.completions.create({
         model: 'gpt-4o',
@@ -778,6 +1000,7 @@ Return STRICT JSON:
         response_format: { type: 'json_object' },
         max_tokens: 1500,
       });
+      await chargeAiRun(admin, user, profile);
       return json({ estimate: JSON.parse(resp.choices[0].message.content) });
     }
 
@@ -786,6 +1009,7 @@ Return STRICT JSON:
       const body = await request.json();
       const { property_id, tenancy_id, dispute_type, tenant_position, landlord_position, language = 'en' } = body;
       if (!property_id || !dispute_type) return json({ error: 'property_id and dispute_type required' }, 400);
+      await ensureAiRunAllowed(admin, user, profile);
 
       // Pull all relevant evidence we have on file
       const [{ data: prop }, { data: tenancy }, { data: invs }, { data: insps }, { data: issues }, { data: contracts }, { data: compliance }] = await Promise.all([
@@ -829,7 +1053,7 @@ Return STRICT JSON:
   "missing_evidence": ["Things that would strengthen the case if obtained"],
   "recommended_arguments": {
     "tenant": ["..."],
-    "landlord": ["..."]
+    "landlord": ["..." ]
   },
   "suggested_settlement": "Pragmatic compromise (if applicable)",
   "tribunal_or_court_advice": "What to expect if escalated, including which UK scheme (TDS, DPS, MyDeposits) or court is appropriate",
@@ -840,6 +1064,7 @@ Return STRICT JSON:
         max_tokens: 3500,
       });
       const ai = JSON.parse(resp.choices[0].message.content);
+      await chargeAiRun(admin, user, profile);
 
       const { data, error } = await admin
         .from('disputes')
@@ -893,9 +1118,18 @@ Return STRICT JSON:
 
     // ===== USER PLAN (for feature gating) =====
     if (path === 'user/plan' && method === 'GET') {
-      const { data: sub } = await admin.from('user_subscriptions').select('plan_id').eq('user_id', user.id).maybeSingle();
+      const billingUserId = await resolveBillingAccount(admin, user, profile);
+      const { data: sub } = await admin.from('user_subscriptions').select('*, subscription_plans(*)').eq('user_id', billingUserId).maybeSingle();
       const plan = sub?.plan_id || 'free';
-      return json({ plan });
+      const planMeta = sub?.subscription_plans || { ...FREE_PLAN_INFO };
+      return json({
+        plan,
+        max_properties: planMeta.max_properties,
+        max_ai_runs_per_month: planMeta.max_ai_runs_per_month,
+        ai_runs_used_this_month: sub?.ai_runs_used_this_month || 0,
+        ai_runs_reset_at: sub?.ai_runs_reset_at || new Date().toISOString(),
+        billing_owner: billingUserId === user.id ? 'self' : 'landlord',
+      });
     }
 
     // ===== AI: TENANCY CO-PILOT CHAT =====
@@ -903,6 +1137,7 @@ Return STRICT JSON:
       const body = await request.json();
       const { messages = [], language = 'en' } = body;
       if (!Array.isArray(messages) || messages.length === 0) return json({ error: 'messages required' }, 400);
+      await ensureAiRunAllowed(admin, user, profile);
 
       // Build user context (their properties + tenancies + issues + compliance)
       let context = '';
@@ -940,6 +1175,7 @@ Always respond in language code "${language}".`;
         ],
         max_tokens: 1000,
       });
+      await chargeAiRun(admin, user, profile);
       return json({ reply: resp.choices[0].message.content });
     }
 
