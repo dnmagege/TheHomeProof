@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getSupabaseAdmin, getUserFromRequest } from '@/lib/supabaseAdmin';
 import OpenAI from 'openai';
 import Stripe from 'stripe';
+import PDFDocument from 'pdfkit';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
@@ -120,6 +121,70 @@ async function resolveBillingAccount(admin, user, profile) {
     }
   }
   return user.id;
+}
+
+async function getUserPropertyIds(admin, userId) {
+  const { data, error } = await admin.from('properties').select('id').eq('landlord_id', userId);
+  if (error) throw new Error(error.message);
+  return (data || []).map((item) => item.id);
+}
+
+async function createPdfReceiptBuffer({ receipt, payment, landlord, tenant }) {
+  const doc = new PDFDocument({ size: 'A4', margin: 50 });
+  const chunks = [];
+  doc.on('data', (chunk) => chunks.push(chunk));
+  doc.on('end', () => undefined);
+
+  doc.fontSize(20).text('HomeProof Payment Receipt', { align: 'center' });
+  doc.moveDown();
+  doc.fontSize(12).text(`Receipt ID: ${receipt.id}`);
+  doc.text(`Payment ID: ${payment.id}`);
+  doc.text(`Date: ${receipt.date}`);
+  doc.text(`Amount: £${Number(receipt.amount).toFixed(2)}`);
+  doc.text(`Issued by: ${landlord?.name || landlord?.email || 'Landlord'}`);
+  doc.text(`Recipient: ${tenant?.name || tenant?.email || 'Tenant'}`);
+  doc.moveDown();
+  if (payment.reference) {
+    doc.text(`Payment reference: ${payment.reference}`);
+  }
+  if (payment.proof_text) {
+    doc.moveDown();
+    doc.text('Proof details:', { underline: true });
+    doc.text(payment.proof_text, { width: 500 });
+  }
+  doc.moveDown();
+  doc.text('Thank you for using HomeProof. This receipt is a record of the approved payment.', { width: 500 });
+  doc.end();
+
+  await new Promise((resolve) => doc.on('finish', resolve));
+  return Buffer.concat(chunks);
+}
+
+async function extractPaymentProof(text) {
+  if (!text || !text.trim()) return null;
+  try {
+    const resp = await openai.chat.completions.create({
+      model: 'gpt-4o',
+      messages: [
+        {
+          role: 'system',
+          content: 'You are a payments extraction assistant. Extract amount, date, and payment reference from the text into strict JSON.',
+        },
+        {
+          role: 'user',
+          content: `Extract payment data from the following text and return exact JSON: {"amount": <number>, "date": "YYYY-MM-DD", "reference": "..."}
+
+${text}`,
+        },
+      ],
+      response_format: { type: 'json_object' },
+      max_tokens: 300,
+    });
+    return JSON.parse(resp.choices[0].message.content);
+  } catch (err) {
+    console.warn('Payment extraction failed', err);
+    return null;
+  }
 }
 
 const FREE_PLAN_INFO = {
@@ -318,6 +383,71 @@ ${rawText.slice(0, 30000)}`,
     ],
     response_format: { type: 'json_object' },
     max_tokens: 3000,
+  });
+  return JSON.parse(resp.choices[0].message.content);
+}
+
+async function aiContractGenerate(tenancy, extraDetails) {
+  const property = tenancy.property || {};
+  const resp = await openai.chat.completions.create({
+    model: 'gpt-4o',
+    messages: [
+      {
+        role: 'system',
+        content: 'You are a UK tenancy contract specialist. Create a fair, compliant draft tenancy agreement and return a strict JSON object with the draft text and contract metadata.',
+      },
+      {
+        role: 'user',
+        content: `Create a tenancy agreement draft for this tenancy using the details below. Return STRICT JSON:
+{
+  "draft_text": "...",
+  "tenant_name": "...",
+  "landlord_name": "...",
+  "rent_details": {"amount": "...", "frequency": "...", "due_day": "..."},
+  "deposit_details": {"amount": "...", "protection_scheme": "..."},
+  "term_dates": {"start_date": "...", "end_date": "..."},
+  "key_clauses": ["..."],
+  "notices": "..."
+}
+
+Tenancy details:
+${JSON.stringify({
+          property_address: property.address_line1,
+          property_city: property.city,
+          property_postcode: property.postcode,
+          property_country: property.country,
+          tenant_email: tenancy.tenant_email,
+          tenant_id: tenancy.tenant_id,
+          rent_amount: tenancy.rent_amount,
+          rent_frequency: tenancy.rent_frequency,
+          start_date: tenancy.start_date,
+          end_date: tenancy.end_date,
+          extra_details: extraDetails || 'none',
+        }, null, 2)}`,
+      },
+    ],
+    response_format: { type: 'json_object' },
+    max_tokens: 3000,
+  });
+  return JSON.parse(resp.choices[0].message.content);
+}
+
+async function aiExtractDocumentMetadata(documentType, rawText) {
+  if (!rawText || !rawText.trim()) return {};
+  const typePrompt = documentType === 'income_proof'
+    ? 'Extract employer name, annual income, payment period, date, and any verification details.'
+    : documentType === 'id_card'
+      ? 'Extract full name, date of birth, ID number, expiry date, address, and issuing authority.'
+      : 'Extract key metadata for this document and return it as a JSON object.';
+
+  const resp = await openai.chat.completions.create({
+    model: 'gpt-4o',
+    messages: [
+      { role: 'system', content: 'You are a document metadata extraction assistant. Return strict JSON and nothing else.' },
+      { role: 'user', content: `Document type: ${documentType || 'generic'}\n${typePrompt}\n\n${rawText}` },
+    ],
+    response_format: { type: 'json_object' },
+    max_tokens: 800,
   });
   return JSON.parse(resp.choices[0].message.content);
 }
@@ -608,6 +738,20 @@ async function handle(request, { params }) {
       return json({ user: { id: user.id, email: user.email }, profile });
     }
 
+    if (path === 'me' && method === 'PATCH') {
+      const body = await request.json();
+      const updates = {};
+      if (body.name !== undefined) updates.name = body.name;
+      if (body.phone !== undefined) updates.phone = body.phone;
+      if (body.country !== undefined) updates.country = body.country;
+      if (body.job_title !== undefined) updates.job_title = body.job_title;
+      if (body.income_range !== undefined) updates.income_range = body.income_range;
+      if (!Object.keys(updates).length) return json({ error: 'No profile fields provided' }, 400);
+      const { data, error } = await admin.from('profiles').update(updates).eq('id', user.id).select().single();
+      if (error) return json({ error: error.message }, 400);
+      return json({ profile: data });
+    }
+
     // ===== PROPERTIES =====
     if (path === 'properties' && method === 'GET') {
       let q = admin.from('properties').select('*').order('created_at', { ascending: false });
@@ -693,6 +837,325 @@ async function handle(request, { params }) {
         .single();
       if (error) return json({ error: error.message }, 400);
       return json({ tenancy: data }, 201);
+    }
+
+    // ===== PROPERTY LINKS =====
+    if (path === 'property-links' && method === 'GET') {
+      const { data, error } = await admin.from('property_links').select('*').order('created_at', { ascending: false });
+      if (error) return json({ error: error.message }, 500);
+      return json({ property_links: data });
+    }
+
+    if (path === 'property-links' && method === 'POST') {
+      const body = await request.json();
+      const { url, title, property_id } = body;
+      if (!url) return json({ error: 'url required' }, 400);
+      const { data, error } = await admin.from('property_links').insert({
+        user_id: user.id,
+        property_id: property_id || null,
+        url,
+        title: title || null,
+      }).select().single();
+      if (error) return json({ error: error.message }, 400);
+      return json({ property_link: data }, 201);
+    }
+
+    // ===== APPLICATIONS =====
+    if (path === 'applications' && method === 'GET') {
+      let q = admin.from('applications').select('*, properties(address_line1, postcode), tenancies(start_date, end_date)').order('created_at', { ascending: false });
+      if (profile?.role === 'landlord') {
+        const propertyIds = await getUserPropertyIds(admin, user.id);
+        if (propertyIds.length === 0) return json({ applications: [] });
+        q = q.in('property_id', propertyIds);
+      } else {
+        q = q.eq('applicant_id', user.id);
+      }
+      const { data, error } = await q;
+      if (error) return json({ error: error.message }, 500);
+      return json({ applications: data });
+    }
+
+    if (path === 'applications' && method === 'POST') {
+      const body = await request.json();
+      const { property_id, applicant_email, applicant_name, rent_offer, move_in_date, message } = body;
+      if (!property_id || !applicant_email) return json({ error: 'property_id and applicant_email required' }, 400);
+      const { data, error } = await admin.from('applications').insert({
+        property_id,
+        applicant_id: user.id,
+        applicant_email,
+        applicant_name: applicant_name || null,
+        rent_offer: rent_offer || null,
+        move_in_date: move_in_date || null,
+        message: message || null,
+      }).select().single();
+      if (error) return json({ error: error.message }, 400);
+      return json({ application: data }, 201);
+    }
+
+    const applicationMatch = path.match(/^applications\/([^/]+)$/);
+    if (applicationMatch && method === 'PATCH') {
+      const applicationId = applicationMatch[1];
+      const body = await request.json();
+      const { data: existing, error: existingError } = await admin.from('applications').select('*').eq('id', applicationId).maybeSingle();
+      if (existingError) return json({ error: existingError.message }, 500);
+      if (!existing) return json({ error: 'Application not found' }, 404);
+      const property = await admin.from('properties').select('landlord_id').eq('id', existing.property_id).maybeSingle();
+      const isLandlord = property?.data?.landlord_id === user.id;
+      const isApplicant = existing.applicant_id === user.id;
+      if (!isLandlord && !isApplicant) return json({ error: 'Not authorized' }, 403);
+      const changes = {};
+      if (body.status && isLandlord) changes.status = body.status;
+      if (body.message && isApplicant) changes.message = body.message;
+      const { data, error } = await admin.from('applications').update(changes).eq('id', applicationId).select().single();
+      if (error) return json({ error: error.message }, 400);
+      return json({ application: data });
+    }
+
+    // ===== MESSAGES =====
+    if (path === 'messages' && method === 'GET') {
+      const url = new URL(request.url);
+      const propertyId = url.searchParams.get('property_id');
+      let query = admin.from('messages').select('*, sender:sender_id(id, name, email), recipient:recipient_id(id, name, email)').order('created_at', { ascending: true });
+      if (propertyId) query = query.eq('property_id', propertyId);
+      const { data, error } = await query;
+      if (error) return json({ error: error.message }, 500);
+      return json({ messages: data });
+    }
+
+    if (path === 'messages' && method === 'POST') {
+      const body = await request.json();
+      const { property_id, tenancy_id, recipient_id, content } = body;
+      if (!content) return json({ error: 'content required' }, 400);
+      const { data, error } = await admin.from('messages').insert({
+        property_id: property_id || null,
+        tenancy_id: tenancy_id || null,
+        sender_id: user.id,
+        recipient_id: recipient_id || null,
+        content,
+      }).select().single();
+      if (error) return json({ error: error.message }, 400);
+      return json({ message: data }, 201);
+    }
+
+    // ===== PAYMENTS =====
+    if (path === 'payments' && method === 'GET') {
+      const { data, error } = await admin.from('payments').select('*').order('created_at', { ascending: false });
+      if (error) return json({ error: error.message }, 500);
+      return json({ payments: data });
+    }
+
+    if (path === 'payments' && method === 'POST') {
+      const body = await request.json();
+      const { tenancy_id, landlord_id, amount, payment_date, reference, proof_text } = body;
+      if (!tenancy_id || !amount) return json({ error: 'tenancy_id and amount required' }, 400);
+      const extracted = await extractPaymentProof(proof_text || '');
+      const { data, error } = await admin.from('payments').insert({
+        tenancy_id,
+        payer_id: user.id,
+        landlord_id: landlord_id || null,
+        amount,
+        payment_date: payment_date || (extracted?.date || new Date().toISOString().slice(0, 10)),
+        reference: reference || extracted?.reference || null,
+        proof_text: proof_text || null,
+        status: 'pending',
+      }).select().single();
+      if (error) return json({ error: error.message }, 400);
+      return json({ payment: data, extracted });
+    }
+
+    const paymentMatch = path.match(/^payments\/([^/]+)$/);
+    if (paymentMatch && method === 'PATCH') {
+      const paymentId = paymentMatch[1];
+      const body = await request.json();
+      const { data: payment } = await admin.from('payments').select('*').eq('id', paymentId).maybeSingle();
+      if (!payment) return json({ error: 'Payment not found' }, 404);
+      if (payment.landlord_id !== user.id && payment.payer_id !== user.id) return json({ error: 'Not authorized' }, 403);
+      const updates = {};
+      if (body.status) updates.status = body.status;
+      if (body.status === 'approved' && payment.landlord_id === user.id) {
+        updates.approved_at = new Date().toISOString();
+        updates.approved_by = user.id;
+      }
+      const { data: updated, error } = await admin.from('payments').update(updates).eq('id', paymentId).select().single();
+      if (error) return json({ error: error.message }, 400);
+      if (body.status === 'approved' && payment.tenancy_id) {
+        const { data: tenantProfile } = await admin.from('profiles').select('*').eq('id', payment.payer_id).maybeSingle();
+        const { data: landlordProfile } = await admin.from('profiles').select('*').eq('id', payment.landlord_id).maybeSingle();
+        const receiptRecord = {
+          payment_id: payment.id,
+          tenancy_id: payment.tenancy_id,
+          issuer_id: user.id,
+          recipient_id: payment.payer_id,
+          amount: payment.amount,
+          date: payment.payment_date || new Date().toISOString().slice(0, 10),
+          metadata: {
+            reference: payment.reference,
+          },
+        };
+        const { data: receipt, error: receiptError } = await admin.from('receipts').insert(receiptRecord).select().single();
+        if (!receiptError && receipt) {
+          const pdfBuffer = await createPdfReceiptBuffer({ receipt, payment, landlord: landlordProfile, tenant: tenantProfile });
+          const filePath = `receipts/${receipt.id}-${Date.now()}.pdf`;
+          const { error: uploadError } = await admin.storage.from('receipts').upload(filePath, pdfBuffer, {
+            contentType: 'application/pdf',
+            upsert: true,
+          });
+          if (!uploadError) {
+            const { data: signed } = await admin.storage.from('receipts').createSignedUrl(filePath, 60 * 60 * 24 * 30);
+            await admin.from('receipts').update({ file_path: filePath, pdf_url: signed?.signedUrl || null }).eq('id', receipt.id);
+          }
+        }
+      }
+      return json({ payment: updated });
+    }
+
+    // ===== RECEIPTS =====
+    if (path === 'receipts' && method === 'GET') {
+      const { data, error } = await admin.from('receipts').select('*').order('created_at', { ascending: false });
+      if (error) return json({ error: error.message }, 500);
+      return json({ receipts: data });
+    }
+
+    // ===== REFERENCES =====
+    if (path === 'references' && method === 'GET') {
+      const { data, error } = await admin.from('references').select('*').order('created_at', { ascending: false });
+      if (error) return json({ error: error.message }, 500);
+      return json({ references: data });
+    }
+
+    if (path === 'references' && method === 'POST') {
+      const body = await request.json();
+      const { application_id, provider_email, provider_name, reference_text } = body;
+      if (!application_id || !provider_email) return json({ error: 'application_id and provider_email required' }, 400);
+      const { data, error } = await admin.from('references').insert({
+        application_id,
+        requester_id: user.id,
+        provider_email,
+        provider_name: provider_name || null,
+        reference_text: reference_text || null,
+      }).select().single();
+      if (error) return json({ error: error.message }, 400);
+      return json({ reference: data }, 201);
+    }
+
+    const referenceMatch = path.match(/^references\/([^/]+)$/);
+    if (referenceMatch && method === 'PATCH') {
+      const referenceId = referenceMatch[1];
+      const body = await request.json();
+      const { data: existing, error: exErr } = await admin.from('references').select('*').eq('id', referenceId).maybeSingle();
+      if (exErr) return json({ error: exErr.message }, 500);
+      if (!existing) return json({ error: 'Reference not found' }, 404);
+      if (existing.requester_id !== user.id) return json({ error: 'Not authorized' }, 403);
+      const { data, error } = await admin.from('references').update({
+        status: body.status || existing.status,
+        reference_text: body.reference_text || existing.reference_text,
+        updated_at: new Date().toISOString(),
+      }).eq('id', referenceId).select().single();
+      if (error) return json({ error: error.message }, 400);
+      return json({ reference: data });
+    }
+
+    // ===== DOCUMENTS =====
+    if (path === 'documents' && method === 'GET') {
+      const { data, error } = await admin.from('documents').select('*').order('created_at', { ascending: false });
+      if (error) return json({ error: error.message }, 500);
+      return json({ documents: data });
+    }
+
+    if (path === 'documents' && method === 'POST') {
+      const body = await request.json();
+      const { name, document_type, property_id, tenancy_id, file_url, file_path, description } = body;
+      if (!name) return json({ error: 'name required' }, 400);
+      const { data, error } = await admin.from('documents').insert({
+        user_id: user.id,
+        name,
+        document_type: document_type || null,
+        property_id: property_id || null,
+        tenancy_id: tenancy_id || null,
+        file_url: file_url || null,
+        file_path: file_path || null,
+        description: description || null,
+      }).select().single();
+      if (error) return json({ error: error.message }, 400);
+      return json({ document: data }, 201);
+    }
+
+    if (path === 'documents/extract' && method === 'POST') {
+      const body = await request.json();
+      const { document_type, raw_text } = body;
+      if (!raw_text) return json({ error: 'raw_text required' }, 400);
+      const metadata = await aiExtractDocumentMetadata(document_type || 'generic', raw_text);
+      return json({ metadata });
+    }
+
+    // ===== MAINTENANCE =====
+    if (path === 'maintenance' && method === 'GET') {
+      const { data, error } = await admin.from('maintenance_requests').select('*').order('created_at', { ascending: false });
+      if (error) return json({ error: error.message }, 500);
+      return json({ maintenance_requests: data });
+    }
+
+    if (path === 'maintenance' && method === 'POST') {
+      const body = await request.json();
+      const { property_id, tenancy_id, title, description, photo_urls } = body;
+      if (!property_id || !title) return json({ error: 'property_id and title required' }, 400);
+      const { data, error } = await admin.from('maintenance_requests').insert({
+        property_id,
+        tenancy_id: tenancy_id || null,
+        created_by: user.id,
+        title,
+        description: description || null,
+        photo_urls: photo_urls || [],
+      }).select().single();
+      if (error) return json({ error: error.message }, 400);
+      return json({ maintenance_request: data }, 201);
+    }
+
+    const maintenanceMatch = path.match(/^maintenance\/([^/]+)$/);
+    if (maintenanceMatch && method === 'PATCH') {
+      const maintenanceId = maintenanceMatch[1];
+      const body = await request.json();
+      const { data: existing, error: exErr } = await admin.from('maintenance_requests').select('*').eq('id', maintenanceId).maybeSingle();
+      if (exErr) return json({ error: exErr.message }, 500);
+      if (!existing) return json({ error: 'Maintenance request not found' }, 404);
+      if (existing.created_by !== user.id) return json({ error: 'Not authorized' }, 403);
+      const updates = {
+        status: body.status || existing.status,
+        title: body.title || existing.title,
+        description: body.description || existing.description,
+        photo_urls: body.photo_urls || existing.photo_urls,
+        updated_at: new Date().toISOString(),
+      };
+      const { data, error } = await admin.from('maintenance_requests').update(updates).eq('id', maintenanceId).select().single();
+      if (error) return json({ error: error.message }, 400);
+      return json({ maintenance_request: data });
+    }
+
+    // ===== USER SETTINGS =====
+    if (path === 'user/settings' && method === 'GET') {
+      const { data, error } = await admin.from('user_settings').select('*').eq('user_id', user.id).maybeSingle();
+      if (error) return json({ error: error.message }, 500);
+      return json({ user_settings: data || {} });
+    }
+
+    if (path === 'user/settings' && method === 'PATCH') {
+      const body = await request.json();
+      const { data, error } = await admin.from('user_settings').upsert({
+        user_id: user.id,
+        language: body.language || undefined,
+        currency: body.currency || undefined,
+        theme: body.theme || undefined,
+        email_notifications: body.email_notifications,
+        in_app_notifications: body.in_app_notifications,
+        timezone: body.timezone,
+        allow_employer_reference: body.allow_employer_reference,
+        allow_previous_landlord_reference: body.allow_previous_landlord_reference,
+        allow_certificate_uploads: body.allow_certificate_uploads,
+        require_payment_proof: body.require_payment_proof,
+        updated_at: new Date().toISOString(),
+      }, { onConflict: 'user_id' }).select().maybeSingle();
+      if (error) return json({ error: error.message }, 400);
+      return json({ user_settings: data });
     }
 
     // ===== AI: GENERATE INVENTORY =====
@@ -795,6 +1258,28 @@ async function handle(request, { params }) {
         .single();
       if (error) return json({ error: error.message }, 400);
       return json({ contract: data });
+    }
+
+    if (path === 'contracts/generate' && method === 'POST') {
+      const body = await request.json();
+      const { tenancy_id, extra_details } = body;
+      if (!tenancy_id) return json({ error: 'tenancy_id required' }, 400);
+      const { data: tenancy, error: tenancyError } = await admin.from('tenancies').select('*').eq('id', tenancy_id).maybeSingle();
+      if (tenancyError) return json({ error: tenancyError.message }, 500);
+      if (!tenancy) return json({ error: 'Tenancy not found' }, 404);
+      if (![tenancy.landlord_id, tenancy.tenant_id].includes(user.id)) return json({ error: 'Not authorized' }, 403);
+      const { data: property, error: propertyError } = await admin.from('properties').select('*').eq('id', tenancy.property_id).maybeSingle();
+      if (propertyError) return json({ error: propertyError.message }, 500);
+      await ensureAiRunAllowed(admin, user, profile);
+      const ai = await aiContractGenerate({ ...tenancy, property }, extra_details || '');
+      await chargeAiRun(admin, user, profile);
+      const { data: contractData, error: contractError } = await admin.from('contracts').insert({
+        tenancy_id,
+        raw_text: ai.draft_text || ai.contract_text || '',
+        ai_summary_json: ai,
+      }).select().single();
+      if (contractError) return json({ error: contractError.message }, 400);
+      return json({ contract: contractData, ai });
     }
 
     // ===== AI: COMPARE INSPECTION =====

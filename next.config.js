@@ -1,11 +1,9 @@
+const { withSentryConfig } = require('@sentry/nextjs');
+
 const nextConfig = {
   output: 'standalone',
   images: {
     unoptimized: true,
-  },
-  experimental: {
-    // Remove if not using Server Components
-    serverComponentsExternalPackages: ['mongodb'],
   },
   webpack(config, { dev }) {
     if (dev) {
@@ -36,6 +34,20 @@ const nextConfig = {
       },
     ];
   },
+  async redirects() {
+    return [
+      {
+        source: '/:path*',
+        has: [{ type: 'host', value: 'www.thehomeproof.co.uk' }],
+        destination: 'https://thehomeproof.co.uk/:path*',
+        permanent: true,
+      },
+    ];
+  },
 };
 
-module.exports = nextConfig;
+const sentryWebpackPluginOptions = {
+  silent: true,
+};
+
+module.exports = withSentryConfig(nextConfig, sentryWebpackPluginOptions);

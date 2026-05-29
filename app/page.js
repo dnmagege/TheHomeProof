@@ -1,9 +1,12 @@
 'use client';
 
+import Link from 'next/link';
 import { useEffect, useState, useCallback } from 'react';
 import { getSupabaseClient } from '@/lib/supabaseClient';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { SiteHeader } from '@/components/site/Header';
+import { SiteFooter } from '@/components/site/Footer';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -13,7 +16,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
-import { Building2, Sparkles, FileText, Camera, Wrench, ShieldCheck, LogOut, Plus, Loader2, ArrowRight, CheckCircle2, AlertTriangle, ScanSearch, Home, ChevronLeft, Upload, Send, Trash2, Calendar, Mail, TrendingUp, Bot, Menu } from 'lucide-react';
+import { Building2, Sparkles, FileText, Camera, Wrench, ShieldCheck, LogOut, Plus, Loader2, ArrowRight, CheckCircle2, AlertTriangle, ScanSearch, Home, ChevronLeft, Upload, Send, Trash2, Calendar, Mail, TrendingUp, Bot, MessageSquare, Menu } from 'lucide-react';
 import { t, detectLocale, saveLocale, formatCurrency } from '@/lib/i18n';
 import { useLocaleState, ThemeToggle, SettingsDialog, AIRentEstimator, AICoPilot, AIDisputeBuilder, PrintInventoryButton } from '@/lib/features';
 
@@ -73,51 +76,7 @@ function Landing({ onGetStarted, onSignIn, loc, updateLoc }) {
   const plan = useUserPlan();
   return (
     <div className="min-h-screen bg-gradient-to-b from-slate-50 to-white dark:from-slate-950 dark:to-slate-900">
-      <nav className="border-b border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/80 backdrop-blur sticky top-0 z-30">
-        <div className="container mx-auto flex h-20 items-center justify-between px-6">
-          <div className="flex items-center gap-2">
-            <img src="/logo.png" alt="HomeProof" className="h-24 w-auto scale-150 origin-left"/>
-          </div>
-          <div className="hidden lg:flex items-center gap-6 text-sm font-medium text-slate-700 dark:text-slate-300">
-            <a href="#features" className="hover:text-brand-600 transition-colors">Features</a>
-            <a href="#how" className="hover:text-brand-600 transition-colors">How it works</a>
-            <a href="#pricing" className="hover:text-brand-600 transition-colors">Pricing</a>
-            <a href="#testimonials" className="hover:text-brand-600 transition-colors">Reviews</a>
-            <a href="#about" className="hover:text-brand-600 transition-colors">About</a>
-            <a href="#faq" className="hover:text-brand-600 transition-colors">FAQ</a>
-          </div>
-          <div className="hidden md:flex items-center gap-2">
-            <SettingsDialog loc={loc} onUpdate={updateLoc}/>
-            <ThemeToggle/>
-            <Button onClick={onGetStarted} className="bg-brand-500 hover:bg-brand-600 text-white">{t('getStarted', lang)} <ArrowRight className="ml-2 h-4 w-4"/></Button>
-          </div>
-          {/* Mobile menu */}
-          <div className="md:hidden flex items-center gap-2">
-            <ThemeToggle/>
-            <Sheet>
-              <SheetTrigger asChild>
-                <Button variant="outline" size="icon"><Menu className="h-5 w-5"/></Button>
-              </SheetTrigger>
-              <SheetContent side="right" className="w-72">
-                <div className="flex flex-col gap-5 mt-8">
-                  <img src="/logo.png" alt="HomeProof" className="h-20 w-auto scale-150 origin-left mb-2"/>
-                  <a href="#features" className="text-base font-medium text-slate-800 dark:text-slate-200 hover:text-brand-600">Features</a>
-                  <a href="#how" className="text-base font-medium text-slate-800 dark:text-slate-200 hover:text-brand-600">How it works</a>
-                  <a href="#pricing" className="text-base font-medium text-slate-800 dark:text-slate-200 hover:text-brand-600">Pricing</a>
-                  <a href="#testimonials" className="text-base font-medium text-slate-800 dark:text-slate-200 hover:text-brand-600">Reviews</a>
-                  <a href="#about" className="text-base font-medium text-slate-800 dark:text-slate-200 hover:text-brand-600">About</a>
-                  <a href="#faq" className="text-base font-medium text-slate-800 dark:text-slate-200 hover:text-brand-600">FAQ</a>
-                  <div className="border-t pt-4 space-y-3">
-                    <SettingsDialog loc={loc} onUpdate={updateLoc}/>
-                    <Button onClick={onGetStarted} className="w-full bg-brand-500 hover:bg-brand-600 text-white">{t('getStarted', lang)} <ArrowRight className="ml-2 h-4 w-4"/></Button>
-                    <Button onClick={onSignIn} className="w-full" variant="outline">{t('signIn', lang)}</Button>
-                  </div>
-                </div>
-              </SheetContent>
-            </Sheet>
-          </div>
-        </div>
-      </nav>
+      <SiteHeader loc={loc} onUpdate={updateLoc} onGetStarted={onGetStarted} onSignIn={onSignIn} ctaLabel={t('getStarted', lang)} />
 
       <section className="container mx-auto px-6 pt-16 pb-20 md:pt-24 md:pb-28">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
@@ -127,13 +86,22 @@ function Landing({ onGetStarted, onSignIn, loc, updateLoc }) {
               {t('landingHeroBefore', lang)} <span className="text-brand-600">{t('landingHeroAfter', lang)}</span>
             </h1>
             <p className="mt-6 text-lg text-slate-600 dark:text-slate-400 max-w-xl">{t('landingSubtitle', lang)}</p>
-            <div className="mt-8 flex flex-col sm:flex-row gap-3">
-              <Button onClick={onGetStarted} size="lg" className="bg-brand-500 hover:bg-brand-600">{t('startFree', lang)} <ArrowRight className="ml-2 h-4 w-4"/></Button>
+            <div className="mt-8 flex flex-col sm:flex-row gap-4">
+              <Button onClick={onGetStarted} size="lg" className="bg-brand-500 hover:bg-brand-600 text-white shadow-lg shadow-brand-200/50">
+                {t('startFree', lang)} <ArrowRight className="ml-2 h-4 w-4"/>
+              </Button>
               <Button onClick={onSignIn} variant="outline" size="lg">{t('signIn', lang)}</Button>
             </div>
-            <div className="mt-10 grid grid-cols-3 gap-6">
-              {[{n:'30s', l:t('aiInventory', lang)},{n:'1-click', l:t('aiContract', lang)},{n:'24/7', l:t('aiCopilot', lang)}].map((s,i)=>(
-                <div key={i}><div className="text-2xl font-bold text-slate-900 dark:text-slate-100">{s.n}</div><div className="text-sm text-slate-500">{s.l}</div></div>
+            <div className="mt-8 grid gap-4 sm:grid-cols-3">
+              {[
+                {n:'Real case-ready evidence', l:'Turn photos, contracts and repair notes into tribunal-ready proof.'},
+                {n:'Built for landlords & tenants', l:'Streamline inventory, disputes and compliance in one place.'},
+                {n:'Free during beta', l:'No card required. Start with your first property today.'},
+              ].map((s, i) => (
+                <div key={i} className="rounded-3xl border border-slate-200 bg-white/90 p-5 text-left shadow-sm dark:border-slate-800 dark:bg-slate-900/80">
+                  <div className="text-base font-semibold text-slate-900 dark:text-slate-100">{s.n}</div>
+                  <p className="mt-3 text-sm text-slate-600 dark:text-slate-400">{s.l}</p>
+                </div>
               ))}
             </div>
           </div>
@@ -153,6 +121,18 @@ function Landing({ onGetStarted, onSignIn, loc, updateLoc }) {
             <Badge className="mb-3 bg-brand-100 text-brand-700">Features</Badge>
             <h2 className="text-3xl md:text-4xl font-bold text-slate-900 dark:text-slate-100">{t('featuresTitle', lang)}</h2>
             <p className="mt-4 text-slate-600 dark:text-slate-400">{t('featuresSubtitle', lang)}</p>
+          </div>
+          <div className="grid gap-4 md:grid-cols-3 mb-10 text-center">
+            {[
+              {title:'Inventory & evidence in minutes', desc:'AI auto-tags rooms, items and damage for fast, tribunal-ready reporting.'},
+              {title:'Tenant-friendly workflows', desc:'Invite tenants, share documents and resolve disputes together.'},
+              {title:'Trusted compliance engine', desc:'Track contracts, rent offers and move-in records in one secure place.'},
+            ].map((item, idx) => (
+              <div key={idx} className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+                <div className="text-sm font-semibold uppercase tracking-[0.2em] text-brand-600">{item.title}</div>
+                <p className="mt-3 text-sm text-slate-600 dark:text-slate-400">{item.desc}</p>
+              </div>
+            ))}
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {[
@@ -204,8 +184,9 @@ function Landing({ onGetStarted, onSignIn, loc, updateLoc }) {
         <div className="container mx-auto px-6">
           <div className="text-center max-w-2xl mx-auto mb-14">
             <Badge className="mb-3 bg-brand-100 text-brand-700">Pricing</Badge>
-            <h2 className="text-3xl md:text-4xl font-bold text-slate-900 dark:text-slate-100">Simple plans. No surprises.</h2>
-            <p className="mt-4 text-slate-600 dark:text-slate-400">Start free. Upgrade only when your portfolio grows.</p>
+            <h2 className="text-3xl md:text-4xl font-bold text-slate-900 dark:text-slate-100">Simple plans for every portfolio.</h2>
+            <p className="mt-4 text-slate-600 dark:text-slate-400">Choose a plan that scales with your properties and gives you AI-backed proof, dispute tools and compliance in one place.</p>
+            <p className="mt-4 text-sm text-slate-500">All plans include secure tenancy storage, inventory export, tenant access and ongoing updates.</p>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-5xl mx-auto">
             {[
@@ -347,9 +328,7 @@ function Landing({ onGetStarted, onSignIn, loc, updateLoc }) {
         </div>
       </section>
 
-      <footer className="border-t border-slate-200 dark:border-slate-800 py-8">
-        <div className="container mx-auto px-6 text-center text-sm text-slate-500">© {new Date().getFullYear()} HomeProof · {t('appTagline', lang)}</div>
-      </footer>
+      <SiteFooter />
     </div>
   );
 }
@@ -361,6 +340,15 @@ function AuthPage({ mode, setMode, onSuccess, onBack, loc }) {
   const [name, setName] = useState('');
   const [role, setRole] = useState('landlord');
   const [loading, setLoading] = useState(false);
+  const [resetCooldown, setResetCooldown] = useState(0);
+
+  useEffect(() => {
+    if (!resetCooldown) return;
+    const timer = window.setInterval(() => {
+      setResetCooldown((value) => Math.max(0, value - 1));
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [resetCooldown]);
 
   async function handle(e) {
     e.preventDefault();
@@ -381,16 +369,17 @@ function AuthPage({ mode, setMode, onSuccess, onBack, loc }) {
         toast.success('Welcome to HomeProof!');
         onSuccess();
       } else if (mode === 'forgot') {
-        const resetUrl = typeof window !== 'undefined'
-          ? process.env.NEXT_PUBLIC_RESET_PASSWORD_URL || `${window.location.origin}/reset-password`
-          : undefined;
         const trimmedEmail = email.trim();
         if (!trimmedEmail) throw new Error('Please enter the email address for your account.');
-        const { error } = await supabase.auth.resetPasswordForEmail(trimmedEmail, {
-          redirectTo: resetUrl,
+        const response = await fetch('/api/auth/recover', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: trimmedEmail }),
         });
-        if (error) throw error;
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || 'Unable to send recovery email.');
         toast.success('Password reset email sent. Check your inbox.');
+        setResetCooldown(60);
         setMode('login');
       } else {
         const { error } = await supabase.auth.signInWithPassword({ email, password });
@@ -411,7 +400,9 @@ function AuthPage({ mode, setMode, onSuccess, onBack, loc }) {
         <Card className="border-slate-200 dark:border-slate-800 shadow-xl">
           <CardHeader>
             <div className="flex items-center gap-2 mb-2">
-              <img src="/logo.png" alt="HomeProof" className="h-24 w-auto scale-150 origin-left"/>
+              <Link href="/" aria-label="Home">
+                <img src="/logo.png" alt="HomeProof" className="h-24 w-auto scale-150 origin-left"/>
+              </Link>
             </div>
             <CardTitle>{mode === 'signup' ? t('createAccount', lang) : t('welcomeBack', lang)}</CardTitle>
             <CardDescription>{mode === 'signup' ? t('appTagline', lang) : t('signIn', lang)}</CardDescription>
@@ -449,11 +440,14 @@ function AuthPage({ mode, setMode, onSuccess, onBack, loc }) {
                   )}
                 </div>
               )}
-              <Button type="submit" className="w-full bg-brand-500 hover:bg-brand-600" disabled={loading}>
+              <Button type="submit" className="w-full bg-brand-500 hover:bg-brand-600" disabled={loading || (mode === 'forgot' && resetCooldown > 0)}>
                 {loading ? <Loader2 className="h-4 w-4 animate-spin"/> : (
                   mode === 'signup' ? t('signUp', lang) : mode === 'forgot' ? 'Send reset link' : t('signIn', lang)
                 )}
               </Button>
+              {mode === 'forgot' && resetCooldown > 0 && (
+                <div className="mt-2 text-sm text-slate-600 dark:text-slate-400">Please wait {resetCooldown} second{resetCooldown === 1 ? '' : 's'} before requesting another reset.</div>
+              )}
             </form>
             <p className="mt-4 text-sm text-center text-slate-600 dark:text-slate-400">
               {mode === 'signup' ? 'Already have an account?' : mode === 'forgot' ? 'Remembered your password?' : "Don't have an account?"}{' '}
@@ -1133,6 +1127,416 @@ function StatCard({ icon: Icon, label, value, color }) {
   );
 }
 
+function ApplicationsTab({ api, profile, properties }) {
+  const [applications, setApplications] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [form, setForm] = useState({ property_id: '', rent_offer: '', move_in_date: '', message: '' });
+  const [saving, setSaving] = useState(false);
+
+  const load = useCallback(async () => {
+    try {
+      const result = await api('applications');
+      setApplications(result.applications || []);
+    } catch (err) {
+      toast.error(err.message);
+    } finally {
+      setLoading(false);
+    }
+  }, [api]);
+
+  useEffect(() => { load(); }, [load]);
+
+  async function apply() {
+    if (!form.property_id) { toast.error('Select a property'); return; }
+    if (!form.rent_offer) { toast.error('Rent offer required'); return; }
+    setSaving(true);
+    try {
+      await api('applications', { method: 'POST', body: JSON.stringify({
+        property_id: form.property_id,
+        applicant_email: profile?.email,
+        applicant_name: profile?.name || '',
+        rent_offer: Number(form.rent_offer),
+        move_in_date: form.move_in_date || null,
+        message: form.message || null,
+      })});
+      toast.success('Application submitted');
+      setForm({ property_id: '', rent_offer: '', move_in_date: '', message: '' });
+      load();
+    } catch (err) {
+      toast.error(err.message);
+    } finally { setSaving(false); }
+  }
+
+  async function updateStatus(applicationId, status) {
+    try {
+      await api(`applications/${applicationId}`, { method: 'PATCH', body: JSON.stringify({ status }) });
+      load();
+      toast.success('Application updated');
+    } catch (err) {
+      toast.error(err.message);
+    }
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Applications</CardTitle>
+        <CardDescription>Track tenant applications and approve or decline them.</CardDescription>
+      </CardHeader>
+      <CardContent>
+        {profile?.role !== 'landlord' ? (
+          <div className="space-y-4 mb-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div>
+                <Label>Property</Label>
+                <Select value={form.property_id} onValueChange={(value) => setForm({ ...form, property_id: value })}>
+                  <SelectTrigger><SelectValue placeholder="Choose property"/></SelectTrigger>
+                  <SelectContent>{properties.map((property) => <SelectItem key={property.id} value={property.id}>{property.address_line1}</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>Rent offer</Label>
+                <Input type="number" value={form.rent_offer} onChange={(e) => setForm({ ...form, rent_offer: e.target.value })} placeholder="Amount in GBP" />
+              </div>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div>
+                <Label>Move-in date</Label>
+                <Input type="date" value={form.move_in_date} onChange={(e) => setForm({ ...form, move_in_date: e.target.value })} />
+              </div>
+              <div>
+                <Label>Message</Label>
+                <Textarea rows={3} value={form.message} onChange={(e) => setForm({ ...form, message: e.target.value })} placeholder="Tell the landlord why you are a strong tenant." />
+              </div>
+            </div>
+            <Button onClick={apply} disabled={saving} className="bg-brand-500 hover:bg-brand-600 text-white">
+              {saving ? 'Submitting...' : 'Submit application'}
+            </Button>
+          </div>
+        ) : null}
+
+        {loading ? (
+          <div className="text-center py-8 text-slate-500"><Loader2 className="inline-block h-5 w-5 animate-spin mr-2"/>Loading applications...</div>
+        ) : applications.length === 0 ? (
+          <div className="text-center py-8 text-slate-500">No applications yet.</div>
+        ) : (
+          <div className="space-y-4">
+            {applications.map((app) => (
+              <Card key={app.id} className="border-slate-200">
+                <CardContent>
+                  <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-3">
+                    <div>
+                      <div className="text-sm text-slate-500">{app.properties?.address_line1 || 'Property'}</div>
+                      <div className="font-semibold text-slate-900">{app.applicant_name || app.applicant_email}</div>
+                      <div className="text-xs text-slate-500">{app.status}</div>
+                    </div>
+                    <div className="text-right space-y-1">
+                      <div className="text-sm text-slate-700">Rent offer: £{app.rent_offer || '—'}</div>
+                      <div className="text-sm text-slate-700">Move-in: {app.move_in_date || 'TBD'}</div>
+                    </div>
+                  </div>
+                  {app.message ? <p className="mt-3 text-sm text-slate-600">{app.message}</p> : null}
+                  {profile?.role === 'landlord' && (
+                    <div className="mt-4 flex gap-2 flex-wrap">
+                      {['approved','declined','reviewing'].map((next) => (
+                        <Button key={next} size="sm" variant={app.status === next ? 'secondary' : 'outline'} onClick={() => updateStatus(app.id, next)}>{next}</Button>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function PropertyLinksTab({ api, properties }) {
+  const [links, setLinks] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [url, setUrl] = useState('');
+  const [title, setTitle] = useState('');
+  const [propertyId, setPropertyId] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  const load = useCallback(async () => {
+    try {
+      const result = await api('property-links');
+      setLinks(result.property_links || []);
+    } catch (err) {
+      toast.error(err.message);
+    } finally { setLoading(false); }
+  }, [api]);
+
+  useEffect(() => { load(); }, [load]);
+
+  async function saveLink() {
+    if (!url) { toast.error('Link URL required'); return; }
+    setSaving(true);
+    try {
+      await api('property-links', { method: 'POST', body: JSON.stringify({ url, title, property_id: propertyId || null }) });
+      toast.success('Link saved');
+      setUrl(''); setTitle(''); setPropertyId('');
+      load();
+    } catch (err) { toast.error(err.message); } finally { setSaving(false); }
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Saved property links</CardTitle>
+        <CardDescription>Save and track property listings from any pathway. No scraping or provider keys required.</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <div className="grid gap-4 mb-6">
+          <div><Label>URL</Label><Input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://www.example.com/listing" /></div>
+          <div><Label>Title (optional)</Label><Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="3-bed house, London" /></div>
+          <div>
+            <Label>Link to property (optional)</Label>
+            <Select value={propertyId} onValueChange={(value) => setPropertyId(value)}>
+              <SelectTrigger><SelectValue placeholder="Select property"/></SelectTrigger>
+              <SelectContent>{properties.map((property) => <SelectItem key={property.id} value={property.id}>{property.address_line1}</SelectItem>)}</SelectContent>
+            </Select>
+          </div>
+          <Button onClick={saveLink} disabled={saving} className="bg-brand-500 hover:bg-brand-600 text-white">{saving ? 'Saving...' : 'Save link'}</Button>
+        </div>
+        {loading ? <div className="text-center py-8 text-slate-500"><Loader2 className="inline-block h-5 w-5 animate-spin mr-2"/>Loading links...</div>
+          : links.length === 0 ? <div className="text-center py-8 text-slate-500">No links saved yet.</div>
+          : <div className="space-y-3">{links.map((link) => (
+              <Card key={link.id} className="border-slate-200">
+                <CardContent>
+                  <a href={link.url} target="_blank" rel="noreferrer" className="font-semibold text-brand-600 hover:underline">{link.title || link.url}</a>
+                  <div className="text-xs text-slate-500">{link.url}</div>
+                  {link.property_id && <div className="text-xs text-slate-500">Linked property ID: {link.property_id}</div>}
+                </CardContent>
+              </Card>
+            ))}</div>}
+      </CardContent>
+    </Card>
+  );
+}
+
+function PaymentsTab({ api, profile, properties }) {
+  const [payments, setPayments] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [form, setForm] = useState({ tenancy_id: '', amount: '', payment_date: '', reference: '', proof_text: '' });
+  const [saving, setSaving] = useState(false);
+
+  const load = useCallback(async () => {
+    try {
+      const result = await api('payments');
+      setPayments(result.payments || []);
+    } catch (err) {
+      toast.error(err.message);
+    } finally { setLoading(false); }
+  }, [api]);
+
+  useEffect(() => { load(); }, [load]);
+
+  async function submitPayment() {
+    if (!form.tenancy_id || !form.amount) { toast.error('Tenancy and amount required'); return; }
+    setSaving(true);
+    try {
+      await api('payments', { method: 'POST', body: JSON.stringify(form) });
+      toast.success('Payment proof uploaded');
+      setForm({ tenancy_id: '', amount: '', payment_date: '', reference: '', proof_text: '' });
+      load();
+    } catch (err) {
+      toast.error(err.message);
+    } finally { setSaving(false); }
+  }
+
+  async function approve(paymentId) {
+    try {
+      await api(`payments/${paymentId}`, { method: 'PATCH', body: JSON.stringify({ status: 'approved' }) });
+      toast.success('Payment approved');
+      load();
+    } catch (err) {
+      toast.error(err.message);
+    }
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Payments</CardTitle>
+        <CardDescription>Upload proof of payment and approve tenant payment claims.</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <div className="grid gap-4 mb-6">
+          <div><Label>Tenancy ID</Label><Input value={form.tenancy_id} onChange={(e) => setForm({ ...form, tenancy_id: e.target.value })} placeholder="Enter tenancy ID" /></div>
+          <div><Label>Amount</Label><Input type="number" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} placeholder="Amount in GBP" /></div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div><Label>Payment date</Label><Input type="date" value={form.payment_date} onChange={(e) => setForm({ ...form, payment_date: e.target.value })} /></div>
+            <div><Label>Reference</Label><Input value={form.reference} onChange={(e) => setForm({ ...form, reference: e.target.value })} placeholder="Bank ref or invoice ref" /></div>
+          </div>
+          <div><Label>Proof text</Label><Textarea rows={3} value={form.proof_text} onChange={(e) => setForm({ ...form, proof_text: e.target.value })} placeholder="Paste bank text, receipt notes or payment description" /></div>
+          <Button onClick={submitPayment} disabled={saving} className="bg-brand-500 hover:bg-brand-600 text-white">{saving ? 'Uploading...' : 'Upload payment proof'}</Button>
+        </div>
+        {loading ? <div className="text-center py-8 text-slate-500"><Loader2 className="inline-block h-5 w-5 animate-spin mr-2"/>Loading payments...</div>
+          : payments.length === 0 ? <div className="text-center py-8 text-slate-500">No payment records yet.</div>
+          : <div className="space-y-3">{payments.map((payment) => (
+              <Card key={payment.id} className="border-slate-200">
+                <CardContent>
+                  <div className="flex justify-between items-start gap-4">
+                    <div>
+                      <div className="text-sm text-slate-500">Tenancy {payment.tenancy_id}</div>
+                      <div className="font-semibold text-slate-900">£{payment.amount}</div>
+                    </div>
+                    <div className="text-right text-xs text-slate-500">{payment.status}</div>
+                  </div>
+                  <div className="mt-2 text-sm text-slate-600">Date: {payment.payment_date || 'N/A'}</div>
+                  {payment.reference ? <div className="text-sm text-slate-600">Reference: {payment.reference}</div> : null}
+                  {profile?.role === 'landlord' && payment.status === 'pending' ? (
+                    <Button className="mt-3 bg-emerald-600 hover:bg-emerald-700 text-white" onClick={() => approve(payment.id)}>Approve payment</Button>
+                  ) : null}
+                </CardContent>
+              </Card>
+            ))}</div>}
+      </CardContent>
+    </Card>
+  );
+}
+
+function ChatTab({ api, profile, properties }) {
+  const [selectedPropertyId, setSelectedPropertyId] = useState(properties[0]?.id || '');
+  const [messages, setMessages] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [sending, setSending] = useState(false);
+  const [input, setInput] = useState('');
+
+  const activeProperty = properties.find((property) => property.id === selectedPropertyId);
+
+  useEffect(() => {
+    if (!selectedPropertyId && properties.length) {
+      setSelectedPropertyId(properties[0].id);
+    }
+  }, [properties, selectedPropertyId]);
+
+  const loadMessages = useCallback(async () => {
+    if (!selectedPropertyId) {
+      setMessages([]);
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
+    try {
+      const result = await api(`messages?property_id=${encodeURIComponent(selectedPropertyId)}`);
+      setMessages((result.messages || []).sort((a, b) => new Date(a.created_at) - new Date(b.created_at)));
+    } catch (err) {
+      toast.error(err.message);
+    } finally {
+      setLoading(false);
+    }
+  }, [api, selectedPropertyId]);
+
+  useEffect(() => {
+    loadMessages();
+  }, [loadMessages]);
+
+  useEffect(() => {
+    if (!selectedPropertyId) return;
+    const channel = supabase.channel(`chat-messages-${selectedPropertyId}`)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `property_id=eq.${selectedPropertyId}` }, (payload) => {
+        setMessages((prev) => {
+          if (prev.some((message) => message.id === payload.new.id)) return prev;
+          return [...prev, payload.new];
+        });
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [selectedPropertyId]);
+
+  async function sendMessage() {
+    if (!selectedPropertyId) {
+      toast.error('Select a property before sending a message');
+      return;
+    }
+    if (!input.trim()) {
+      toast.error('Message text required');
+      return;
+    }
+    setSending(true);
+    try {
+      await api('messages', { method: 'POST', body: JSON.stringify({ property_id: selectedPropertyId, content: input.trim() }) });
+      setInput('');
+    } catch (err) {
+      toast.error(err.message);
+    } finally {
+      setSending(false);
+    }
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Realtime chat</CardTitle>
+        <CardDescription>Chat with the landlord or tenant for this property in real time.</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <div className="grid gap-4 mb-6">
+          <div>
+            <Label>Property</Label>
+            <Select value={selectedPropertyId} onValueChange={(value) => setSelectedPropertyId(value)}>
+              <SelectTrigger><SelectValue placeholder="Select property" /></SelectTrigger>
+              <SelectContent>
+                {properties.map((property) => (
+                  <SelectItem key={property.id} value={property.id}>{property.address_line1}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+
+        {!selectedPropertyId ? (
+          <div className="text-center py-8 text-slate-500">Select a property to start the chat.</div>
+        ) : loading ? (
+          <div className="text-center py-8 text-slate-500"><Loader2 className="inline-block h-5 w-5 animate-spin mr-2"/>Loading messages...</div>
+        ) : (
+          <div className="flex flex-col gap-4">
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+              <div className="text-sm text-slate-500">Chat for</div>
+              <div className="font-semibold text-slate-900">{activeProperty?.address_line1 || 'Selected property'}</div>
+              {activeProperty?.postcode ? <div className="text-xs text-slate-500">{activeProperty.postcode}</div> : null}
+            </div>
+
+            <div className="space-y-3 max-h-[420px] overflow-y-auto px-2 pb-2">
+              {messages.length === 0 ? (
+                <div className="text-center py-12 text-slate-500">No messages yet for this property.</div>
+              ) : messages.map((message) => {
+                const isMine = message.sender?.id === profile?.id;
+                return (
+                  <div key={message.id} className={`flex ${isMine ? 'justify-end' : 'justify-start'}`}>
+                    <div className={`max-w-[85%] rounded-2xl p-3 ${isMine ? 'bg-brand-500 text-white' : 'bg-slate-100 text-slate-900'}`}>
+                      <div className="text-xs font-medium uppercase tracking-wide text-slate-500 mb-1">{isMine ? 'You' : message.sender?.name || message.sender?.email || 'Partner'}</div>
+                      <div className="whitespace-pre-wrap text-sm">{message.content}</div>
+                      <div className="mt-2 text-[11px] text-slate-500 text-right">{new Date(message.created_at).toLocaleString()}</div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="grid gap-3">
+              <Textarea rows={3} value={input} onChange={(e) => setInput(e.target.value)} placeholder="Type your message here..." />
+              <div className="flex justify-end">
+                <Button onClick={sendMessage} disabled={sending} className="bg-brand-500 hover:bg-brand-600 text-white">
+                  {sending ? 'Sending...' : 'Send message'}
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 function Dashboard({ user, profile, onSignOut, loc, updateLoc }) {
   const lang = loc?.language || 'en';
   const [properties, setProperties] = useState([]);
@@ -1178,7 +1582,9 @@ function Dashboard({ user, profile, onSignOut, loc, updateLoc }) {
       <nav className="border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
         <div className="container mx-auto flex h-20 items-center justify-between px-6">
           <div className="flex items-center gap-2">
-            <img src="/logo.png" alt="HomeProof" className="h-24 w-auto scale-150 origin-left"/>
+            <Link href="/" aria-label="Home">
+              <img src="/logo.png" alt="HomeProof" className="h-24 w-auto scale-150 origin-left"/>
+            </Link>
             <Badge variant="outline" className="ml-2 capitalize">{profile?.role === 'landlord' ? t('landlord', lang) : t('tenant', lang)}</Badge>
           </div>
           <div className="hidden md:flex items-center gap-2">
@@ -1235,12 +1641,20 @@ function Dashboard({ user, profile, onSignOut, loc, updateLoc }) {
         <Tabs defaultValue="properties">
           <TabsList className="mb-6 flex-wrap h-auto">
             <TabsTrigger value="properties"><Home className="h-4 w-4 mr-2"/>{t('properties', lang)}</TabsTrigger>
+            <TabsTrigger value="profile"><Mail className="h-4 w-4 mr-2"/>Profile</TabsTrigger>
+            <TabsTrigger value="documents"><FileText className="h-4 w-4 mr-2"/>Documents</TabsTrigger>
+            <TabsTrigger value="maintenance"><Wrench className="h-4 w-4 mr-2"/>Maintenance</TabsTrigger>
+            <TabsTrigger value="receipts"><CheckCircle2 className="h-4 w-4 mr-2"/>Receipts</TabsTrigger>
             <TabsTrigger value="inventory"><Camera className="h-4 w-4 mr-2"/>{t('aiInventory', lang)}</TabsTrigger>
             <TabsTrigger value="contract"><FileText className="h-4 w-4 mr-2"/>{t('aiContract', lang)}</TabsTrigger>
             <TabsTrigger value="damage"><ScanSearch className="h-4 w-4 mr-2"/>{t('aiDamage', lang)}</TabsTrigger>
             <TabsTrigger value="rent"><TrendingUp className="h-4 w-4 mr-2"/>{t('aiRent', lang)}</TabsTrigger>
             <TabsTrigger value="copilot"><Bot className="h-4 w-4 mr-2"/>{t('aiCopilot', lang)}</TabsTrigger>
             <TabsTrigger value="disputes"><Sparkles className="h-4 w-4 mr-2"/>Disputes</TabsTrigger>
+            <TabsTrigger value="applications"><FileText className="h-4 w-4 mr-2"/>Applications</TabsTrigger>
+            <TabsTrigger value="links"><ScanSearch className="h-4 w-4 mr-2"/>Saved links</TabsTrigger>
+            <TabsTrigger value="payments"><Calendar className="h-4 w-4 mr-2"/>Payments</TabsTrigger>
+            <TabsTrigger value="chat"><MessageSquare className="h-4 w-4 mr-2"/>Chat</TabsTrigger>
             <TabsTrigger value="issues"><Wrench className="h-4 w-4 mr-2"/>{t('issues', lang)}</TabsTrigger>
             {profile?.role === 'landlord' && <TabsTrigger value="compliance"><ShieldCheck className="h-4 w-4 mr-2"/>{t('compliance', lang)}</TabsTrigger>}
           </TabsList>
@@ -1270,11 +1684,462 @@ function Dashboard({ user, profile, onSignOut, loc, updateLoc }) {
           <TabsContent value="rent"><AIRentEstimator properties={properties} loc={loc} api={api}/></TabsContent>
           <TabsContent value="copilot"><AICoPilot loc={loc} api={api}/></TabsContent>
           <TabsContent value="disputes"><AIDisputeBuilder properties={properties} loc={loc} api={api}/></TabsContent>
+          <TabsContent value="applications"><ApplicationsTab api={api} profile={profile} properties={properties} /></TabsContent>
+          <TabsContent value="links"><PropertyLinksTab api={api} properties={properties} /></TabsContent>
+          <TabsContent value="payments"><PaymentsTab api={api} profile={profile} properties={properties} /></TabsContent>
+          <TabsContent value="receipts"><ReceiptsTab api={api} profile={profile} /></TabsContent>
+          <TabsContent value="chat"><ChatTab api={api} profile={profile} properties={properties} /></TabsContent>
+          <TabsContent value="documents"><DocumentsTab api={api} profile={profile} properties={properties} /></TabsContent>
+          <TabsContent value="maintenance"><MaintenanceTab api={api} profile={profile} properties={properties} /></TabsContent>
+          <TabsContent value="receipts"><ReceiptsTab api={api} profile={profile} /></TabsContent>
+          <TabsContent value="profile"><ProfileTab api={api} profile={profile} /></TabsContent>
           <TabsContent value="issues"><IssuesTab properties={properties} profile={profile}/></TabsContent>
           {profile?.role === 'landlord' && <TabsContent value="compliance"><ComplianceTab properties={properties}/></TabsContent>}
         </Tabs>
       </div>
     </div>
+  );
+}
+
+function DocumentsTab({ api, profile, properties }) {
+  const [documents, setDocuments] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [form, setForm] = useState({
+    name: '',
+    document_type: 'id_card',
+    property_id: '',
+    tenancy_id: '',
+    description: '',
+    raw_text: '',
+  });
+  const [file, setFile] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const [metadata, setMetadata] = useState(null);
+
+  const loadDocuments = useCallback(async () => {
+    setLoading(true);
+    try {
+      const result = await api('documents');
+      setDocuments(result.documents || []);
+    } catch (err) {
+      toast.error(err.message);
+    } finally {
+      setLoading(false);
+    }
+  }, [api]);
+
+  useEffect(() => { loadDocuments(); }, [loadDocuments]);
+
+  async function uploadDocument() {
+    if (!form.name || !file) {
+      toast.error('Name and file are required.');
+      return;
+    }
+    setSaving(true);
+    try {
+      const uploaded = await uploadToBucket('documents', file);
+      await api('documents', {
+        method: 'POST',
+        body: JSON.stringify({
+          ...form,
+          file_url: uploaded.url,
+          file_path: uploaded.path,
+        }),
+      });
+      toast.success('Document uploaded successfully');
+      setFile(null);
+      setForm({ name: '', document_type: 'id_card', property_id: '', tenancy_id: '', description: '', raw_text: '' });
+      setMetadata(null);
+      loadDocuments();
+    } catch (err) {
+      toast.error(err.message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function extractMetadata() {
+    if (!form.raw_text.trim()) {
+      toast.error('Paste text or document content to extract metadata.');
+      return;
+    }
+    setSaving(true);
+    try {
+      const result = await api('documents/extract', {
+        method: 'POST',
+        body: JSON.stringify({ document_type: form.document_type, raw_text: form.raw_text }),
+      });
+      setMetadata(result.metadata || {});
+      toast.success('Metadata extracted');
+    } catch (err) {
+      toast.error(err.message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Document vault</CardTitle>
+        <CardDescription>Store tenancy documents, ID, proof of income and certificates in one place.</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <div>
+            <Label>Name</Label>
+            <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="e.g. Passport, Payslip" />
+          </div>
+          <div>
+            <Label>Type</Label>
+            <Select value={form.document_type} onValueChange={(value) => setForm({ ...form, document_type: value })}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="id_card">ID document</SelectItem>
+                <SelectItem value="income_proof">Income proof</SelectItem>
+                <SelectItem value="tenancy_agreement">Tenancy agreement</SelectItem>
+                <SelectItem value="certificate">Certificate</SelectItem>
+                <SelectItem value="other">Other</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <div>
+            <Label>Property</Label>
+            <Select value={form.property_id} onValueChange={(value) => setForm({ ...form, property_id: value })}>
+              <SelectTrigger><SelectValue placeholder="Optional property" /></SelectTrigger>
+              <SelectContent>
+                {properties.map((p) => <SelectItem key={p.id} value={p.id}>{p.address_line1}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <Label>Tenancy ID</Label>
+            <Input value={form.tenancy_id} onChange={(e) => setForm({ ...form, tenancy_id: e.target.value })} placeholder="Optional tenancy ID" />
+          </div>
+        </div>
+        <div>
+          <Label>File</Label>
+          <Input type="file" accept="application/pdf,image/*,text/plain" onChange={(e) => setFile(e.target.files?.[0] || null)} />
+        </div>
+        <div>
+          <Label>Description or pasted text</Label>
+          <Textarea rows={4} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder="Optional notes about the document" />
+        </div>
+        <div>
+          <Label>Raw text for AI extraction</Label>
+          <Textarea rows={3} value={form.raw_text} onChange={(e) => setForm({ ...form, raw_text: e.target.value })} placeholder="Paste receipt content, ID text or income proof text" />
+          <Button onClick={extractMetadata} disabled={saving} className="mt-3 bg-brand-500 hover:bg-brand-600 text-white">Extract metadata</Button>
+        </div>
+        <div className="flex gap-3 flex-wrap">
+          <Button onClick={uploadDocument} disabled={saving} className="bg-brand-500 hover:bg-brand-600 text-white">{saving ? 'Saving…' : 'Upload document'}</Button>
+        </div>
+        {metadata && (
+          <div className="rounded-lg border bg-slate-50 p-4">
+            <h3 className="font-semibold mb-2">AI metadata</h3>
+            <pre className="text-xs overflow-x-auto whitespace-pre-wrap">{JSON.stringify(metadata, null, 2)}</pre>
+          </div>
+        )}
+        {loading ? (
+          <div className="text-center py-8 text-slate-500"><Loader2 className="inline-block h-5 w-5 animate-spin mr-2"/>Loading documents...</div>
+        ) : documents.length === 0 ? (
+          <div className="text-center py-8 text-slate-500">No documents uploaded yet.</div>
+        ) : (
+          <div className="space-y-3">
+            {documents.map((doc) => (
+              <Card key={doc.id} className="border-slate-200">
+                <CardContent>
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <div className="font-semibold text-slate-900">{doc.name}</div>
+                      <div className="text-xs text-slate-500">{doc.document_type || 'Document'}</div>
+                    </div>
+                    <a href={doc.file_url} target="_blank" rel="noreferrer" className="text-sm text-brand-600 hover:underline">Download</a>
+                  </div>
+                  {doc.description ? <div className="mt-2 text-sm text-slate-600">{doc.description}</div> : null}
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function MaintenanceTab({ api, profile, properties }) {
+  const [requests, setRequests] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [form, setForm] = useState({ property_id: '', tenancy_id: '', title: '', description: '', photos: [] });
+
+  const loadRequests = useCallback(async () => {
+    setLoading(true);
+    try {
+      const result = await api('maintenance');
+      setRequests(result.maintenance_requests || []);
+    } catch (err) {
+      toast.error(err.message);
+    } finally {
+      setLoading(false);
+    }
+  }, [api]);
+
+  useEffect(() => { loadRequests(); }, [loadRequests]);
+
+  async function createRequest() {
+    if (!form.property_id || !form.title) {
+      toast.error('Property and title are required.');
+      return;
+    }
+    setSaving(true);
+    try {
+      const photo_urls = [];
+      for (const file of form.photos) {
+        const uploaded = await uploadToBucket('maintenance', file);
+        photo_urls.push(uploaded.url);
+      }
+      await api('maintenance', {
+        method: 'POST',
+        body: JSON.stringify({
+          property_id: form.property_id,
+          tenancy_id: form.tenancy_id || null,
+          title: form.title,
+          description: form.description || null,
+          photo_urls,
+        }),
+      });
+      toast.success('Maintenance request created');
+      setForm({ property_id: '', tenancy_id: '', title: '', description: '', photos: [] });
+      loadRequests();
+    } catch (err) {
+      toast.error(err.message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function resolveRequest(id) {
+    try {
+      await api(`maintenance/${id}`, { method: 'PATCH', body: JSON.stringify({ status: 'resolved' }) });
+      toast.success('Request resolved');
+      loadRequests();
+    } catch (err) {
+      toast.error(err.message);
+    }
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Maintenance requests</CardTitle>
+        <CardDescription>Track repairs, attach photos, and resolve issues with your landlord or tenant.</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <div>
+            <Label>Property</Label>
+            <Select value={form.property_id} onValueChange={(value) => setForm({ ...form, property_id: value })}>
+              <SelectTrigger><SelectValue placeholder="Select a property" /></SelectTrigger>
+              <SelectContent>
+                {properties.map((p) => <SelectItem key={p.id} value={p.id}>{p.address_line1}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <Label>Tenancy ID</Label>
+            <Input value={form.tenancy_id} onChange={(e) => setForm({ ...form, tenancy_id: e.target.value })} placeholder="Optional tenancy ID" />
+          </div>
+        </div>
+        <div>
+          <Label>Issue title</Label>
+          <Input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="Leaking sink, broken window, etc." />
+        </div>
+        <div>
+          <Label>Description</Label>
+          <Textarea rows={4} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder="Describe the problem and urgency." />
+        </div>
+        <div>
+          <Label>Photos</Label>
+          <Input type="file" accept="image/*" multiple onChange={(e) => setForm({ ...form, photos: Array.from(e.target.files || []) })} />
+          {form.photos.length > 0 && <p className="text-xs text-slate-500 mt-1">{form.photos.length} photo(s) selected</p>}
+        </div>
+        <Button onClick={createRequest} disabled={saving} className="bg-brand-500 hover:bg-brand-600 text-white">{saving ? 'Saving…' : 'Submit request'}</Button>
+
+        {loading ? (
+          <div className="text-center py-8 text-slate-500"><Loader2 className="inline-block h-5 w-5 animate-spin mr-2"/>Loading requests...</div>
+        ) : requests.length === 0 ? (
+          <div className="text-center py-8 text-slate-500">No maintenance requests yet.</div>
+        ) : (
+          <div className="space-y-3">
+            {requests.map((request) => (
+              <Card key={request.id} className="border-slate-200">
+                <CardContent>
+                  <div className="flex items-center justify-between gap-4">
+                    <div>
+                      <div className="font-semibold text-slate-900">{request.title}</div>
+                      <div className="text-xs text-slate-500">{request.status}</div>
+                    </div>
+                    {profile?.role === 'landlord' && request.status !== 'resolved' ? (
+                      <Button size="sm" onClick={() => resolveRequest(request.id)} className="bg-emerald-600 hover:bg-emerald-700 text-white">Resolve</Button>
+                    ) : null}
+                  </div>
+                  {request.description ? <div className="mt-2 text-sm text-slate-600">{request.description}</div> : null}
+                  {Array.isArray(request.photo_urls) && request.photo_urls.length > 0 && (
+                    <div className="mt-3 grid grid-cols-2 gap-2">
+                      {request.photo_urls.map((url, index) => <img key={index} src={url} className="h-24 w-full object-cover rounded" alt="Maintenance" />)}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function ReceiptsTab({ api, profile }) {
+  const [receipts, setReceipts] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  const loadReceipts = useCallback(async () => {
+    setLoading(true);
+    try {
+      const result = await api('receipts');
+      setReceipts(result.receipts || []);
+    } catch (err) {
+      toast.error(err.message);
+    } finally {
+      setLoading(false);
+    }
+  }, [api]);
+
+  useEffect(() => { loadReceipts(); }, [loadReceipts]);
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Receipts</CardTitle>
+        <CardDescription>Download official payment receipts and keep tenancy accounts up to date.</CardDescription>
+      </CardHeader>
+      <CardContent>
+        {loading ? (
+          <div className="text-center py-8 text-slate-500"><Loader2 className="inline-block h-5 w-5 animate-spin mr-2"/>Loading receipts...</div>
+        ) : receipts.length === 0 ? (
+          <div className="text-center py-8 text-slate-500">No receipts have been generated yet.</div>
+        ) : (
+          <div className="space-y-3">
+            {receipts.map((receipt) => (
+              <Card key={receipt.id} className="border-slate-200">
+                <CardContent>
+                  <div className="flex items-center justify-between gap-4">
+                    <div>
+                      <div className="font-semibold text-slate-900">Receipt {receipt.id.slice(0, 8)}</div>
+                      <div className="text-xs text-slate-500">Amount: £{receipt.amount} · Date: {receipt.date}</div>
+                    </div>
+                    {receipt.pdf_url ? (
+                      <a href={receipt.pdf_url} target="_blank" rel="noreferrer" className="text-brand-600 hover:underline">Download PDF</a>
+                    ) : (
+                      <span className="text-xs text-slate-400">PDF pending</span>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function ProfileTab({ api, profile }) {
+  const [form, setForm] = useState({
+    name: profile?.name || '',
+    email: profile?.email || '',
+    phone: profile?.phone || '',
+    country: profile?.country || 'UK',
+    job_title: profile?.job_title || '',
+    income_range: profile?.income_range || '',
+  });
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    setForm({
+      name: profile?.name || '',
+      email: profile?.email || '',
+      phone: profile?.phone || '',
+      country: profile?.country || 'UK',
+      job_title: profile?.job_title || '',
+      income_range: profile?.income_range || '',
+    });
+  }, [profile]);
+
+  async function saveProfile() {
+    setSaving(true);
+    try {
+      const { profile: updated } = await api('me', {
+        method: 'PATCH',
+        body: JSON.stringify({
+          name: form.name,
+          phone: form.phone,
+          country: form.country,
+          job_title: form.job_title,
+          income_range: form.income_range,
+        }),
+      });
+      setForm({ ...form, ...updated });
+      toast.success('Profile updated');
+    } catch (err) {
+      toast.error(err.message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Personal profile</CardTitle>
+        <CardDescription>Keep your tenant or landlord profile up to date and save application details.</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <div>
+            <Label>Name</Label>
+            <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+          </div>
+          <div>
+            <Label>Email</Label>
+            <Input value={form.email} disabled />
+          </div>
+        </div>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <div>
+            <Label>Phone</Label>
+            <Input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
+          </div>
+          <div>
+            <Label>Country</Label>
+            <Input value={form.country} onChange={(e) => setForm({ ...form, country: e.target.value })} />
+          </div>
+        </div>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <div>
+            <Label>Job title</Label>
+            <Input value={form.job_title} onChange={(e) => setForm({ ...form, job_title: e.target.value })} placeholder="e.g. Software engineer" />
+          </div>
+          <div>
+            <Label>Income range</Label>
+            <Input value={form.income_range} onChange={(e) => setForm({ ...form, income_range: e.target.value })} placeholder="e.g. £40k-£50k" />
+          </div>
+        </div>
+        <Button onClick={saveProfile} disabled={saving} className="bg-brand-500 hover:bg-brand-600 text-white">{saving ? 'Saving…' : 'Save profile'}</Button>
+      </CardContent>
+    </Card>
   );
 }
 
