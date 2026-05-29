@@ -757,9 +757,16 @@ async function handle(request, { params }) {
       let q = admin.from('properties').select('*').order('created_at', { ascending: false });
       if (profile?.role === 'landlord') q = q.eq('landlord_id', user.id);
       else {
-        // tenants: only properties via tenancy
-        const { data: tens } = await admin.from('tenancies').select('property_id').eq('tenant_id', user.id);
-        const ids = (tens || []).map((t) => t.property_id);
+        // tenants: include properties linked by tenant_id or by invited tenant_email
+        const email = user.email?.trim().toLowerCase();
+        const { data: ownedById, error: idError } = await admin.from('tenancies').select('property_id').eq('tenant_id', user.id);
+        if (idError) return json({ error: idError.message }, 500);
+        let ids = (ownedById || []).map((t) => t.property_id);
+        if (email) {
+          const { data: invitedByEmail, error: emailError } = await admin.from('tenancies').select('property_id').ilike('tenant_email', email);
+          if (emailError) return json({ error: emailError.message }, 500);
+          ids = Array.from(new Set([...(ids || []), ...(invitedByEmail || []).map((t) => t.property_id)]));
+        }
         if (ids.length === 0) return json({ properties: [] });
         q = q.in('id', ids);
       }

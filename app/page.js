@@ -16,7 +16,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
-import { Building2, Sparkles, FileText, Camera, Wrench, ShieldCheck, LogOut, Plus, Loader2, ArrowRight, CheckCircle2, AlertTriangle, ScanSearch, Home, ChevronLeft, Upload, Send, Trash2, Calendar, Mail, TrendingUp, Bot, MessageSquare, Menu } from 'lucide-react';
+import { Building2, Sparkles, FileText, Camera, Wrench, ShieldCheck, LogOut, Plus, Loader2, ArrowRight, CheckCircle2, AlertTriangle, ScanSearch, Home, ChevronLeft, Upload, Send, Trash2, Calendar, Mail, TrendingUp, Bot, MessageSquare, Menu, X } from 'lucide-react';
 import { t, detectLocale, saveLocale, formatCurrency } from '@/lib/i18n';
 import { useLocaleState, ThemeToggle, SettingsDialog, AIRentEstimator, AICoPilot, AIDisputeBuilder, PrintInventoryButton } from '@/lib/features';
 
@@ -341,6 +341,7 @@ function AuthPage({ mode, setMode, onSuccess, onBack, loc }) {
   const [role, setRole] = useState('landlord');
   const [loading, setLoading] = useState(false);
   const [resetCooldown, setResetCooldown] = useState(0);
+  const [inviteEmail, setInviteEmail] = useState('');
 
   useEffect(() => {
     if (!resetCooldown) return;
@@ -349,6 +350,16 @@ function AuthPage({ mode, setMode, onSuccess, onBack, loc }) {
     }, 1000);
     return () => window.clearInterval(timer);
   }, [resetCooldown]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const params = new URLSearchParams(window.location.search);
+    const invite = params.get('inviteEmail')?.trim();
+    if (invite) {
+      setInviteEmail(invite);
+      setEmail((current) => current || invite);
+    }
+  }, []);
 
   async function handle(e) {
     e.preventDefault();
@@ -428,6 +439,9 @@ function AuthPage({ mode, setMode, onSuccess, onBack, loc }) {
               <div>
                 <Label htmlFor="email">{t('email', lang)}</Label>
                 <Input id="email" type="email" value={email} onChange={(e)=>setEmail(e.target.value)} required/>
+                {mode === 'signup' && inviteEmail ? (
+                  <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">You were invited with <strong>{inviteEmail}</strong>. Sign up with that email to link your tenancy automatically.</p>
+                ) : null}
               </div>
               {mode !== 'forgot' && (
                 <div>
@@ -812,6 +826,27 @@ function TenancyDialog({ propertyId, onCreated }) {
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({ tenant_email: '', start_date: '', end_date: '', rent_amount: '', rent_frequency: 'monthly', deposit_amount: '' });
   const [loading, setLoading] = useState(false);
+  const [inviteLink, setInviteLink] = useState('');
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (form.tenant_email) {
+      setInviteLink(`${window.location.origin}/?inviteEmail=${encodeURIComponent(form.tenant_email.trim())}`);
+    } else {
+      setInviteLink('');
+    }
+  }, [form.tenant_email]);
+
+  async function copyInvite() {
+    if (!inviteLink) return;
+    try {
+      await navigator.clipboard.writeText(inviteLink);
+      toast.success('Invite link copied to clipboard');
+    } catch (err) {
+      toast.error('Unable to copy invite link');
+    }
+  }
+
   async function submit() {
     setLoading(true);
     try {
@@ -822,11 +857,21 @@ function TenancyDialog({ propertyId, onCreated }) {
   }
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild><Button variant="outline" size="sm"><Plus className="h-3 w-3 mr-1"/>Add tenancy</Button></DialogTrigger>
+      <DialogTrigger asChild><Button variant="outline" size="sm"><Plus className="h-3 w-3 mr-1"/>Invite tenant</Button></DialogTrigger>
       <DialogContent>
         <DialogHeader><DialogTitle>New tenancy</DialogTitle></DialogHeader>
         <div className="space-y-3">
-          <div><Label>Tenant email</Label><Input value={form.tenant_email} onChange={(e)=>setForm({...form,tenant_email:e.target.value})}/></div>
+          <div>
+            <Label>Tenant email</Label>
+            <Input value={form.tenant_email} onChange={(e)=>setForm({...form,tenant_email:e.target.value})}/>
+            <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">Enter the tenant's email to invite them and link the tenancy when they sign up.</p>
+            {inviteLink ? (
+              <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <div className="text-sm text-slate-600 dark:text-slate-400 break-words">Invite link: <code className="font-mono text-xs text-slate-900 dark:text-slate-100">{inviteLink}</code></div>
+                <Button type="button" variant="outline" size="sm" onClick={copyInvite}>Copy invite link</Button>
+              </div>
+            ) : null}
+          </div>
           <div className="grid grid-cols-2 gap-3">
             <div><Label>Start date</Label><Input type="date" value={form.start_date} onChange={(e)=>setForm({...form,start_date:e.target.value})}/></div>
             <div><Label>End date</Label><Input type="date" value={form.end_date} onChange={(e)=>setForm({...form,end_date:e.target.value})}/></div>
@@ -1543,6 +1588,7 @@ function Dashboard({ user, profile, onSignOut, loc, updateLoc }) {
   const [stats, setStats] = useState({ properties: 0, tenancies: 0, openIssues: 0, expiringCompliance: 0 });
   const [planInfo, setPlanInfo] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [copilotOpen, setCopilotOpen] = useState(false);
 
   const loadPlanInfo = useCallback(async () => {
     try {
@@ -1697,6 +1743,25 @@ function Dashboard({ user, profile, onSignOut, loc, updateLoc }) {
           {profile?.role === 'landlord' && <TabsContent value="compliance"><ComplianceTab properties={properties}/></TabsContent>}
         </Tabs>
       </div>
+      <div className="fixed right-6 bottom-6 z-50 flex flex-col items-end">
+        <Button onClick={() => setCopilotOpen((open) => !open)} className="rounded-full bg-violet-600 p-4 shadow-2xl shadow-violet-500/20 text-white hover:bg-violet-700">
+          <Bot className="h-5 w-5"/>
+          <span className="sr-only">Toggle AI assistant</span>
+        </Button>
+      </div>
+      {copilotOpen ? (
+        <div className="fixed right-6 bottom-24 z-50 w-[380px] h-[620px] rounded-3xl border border-slate-200 bg-white shadow-2xl dark:border-slate-800 dark:bg-slate-950 overflow-hidden">
+          <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3 dark:border-slate-800">
+            <div className="flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-slate-100">
+              <Bot className="h-4 w-4 text-violet-600"/> AI assistant
+            </div>
+            <Button variant="ghost" size="icon" onClick={() => setCopilotOpen(false)}><X className="h-4 w-4"/></Button>
+          </div>
+          <div className="h-[calc(100%-52px)] overflow-hidden">
+            <AICoPilot loc={loc} api={api}/>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
