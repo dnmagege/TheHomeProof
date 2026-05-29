@@ -476,10 +476,12 @@ function AuthPage({ mode, setMode, onSuccess, onBack, loc }) {
   );
 }
 
-function PropertyCreateDialog({ onCreated }) {
+function PropertyCreateDialog({ onCreated, planInfo, currentCount }) {
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({ address_line1: '', address_line2: '', city: '', postcode: '', country: 'UK' });
   const [loading, setLoading] = useState(false);
+  const maxProperties = planInfo?.max_properties;
+  const limitReached = typeof maxProperties === 'number' && currentCount >= maxProperties;
 
   async function submit() {
     setLoading(true);
@@ -495,20 +497,29 @@ function PropertyCreateDialog({ onCreated }) {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button className="bg-brand-500 hover:bg-brand-600"><Plus className="h-4 w-4 mr-2"/>Add property</Button>
+        <Button className="bg-brand-500 hover:bg-brand-600" disabled={limitReached}><Plus className="h-4 w-4 mr-2"/>{limitReached ? 'Limit reached' : 'Add property'}</Button>
       </DialogTrigger>
       <DialogContent>
         <DialogHeader><DialogTitle>Add a property</DialogTitle></DialogHeader>
         <div className="space-y-3">
-          <div><Label>Address line 1</Label><Input value={form.address_line1} onChange={(e)=>setForm({...form,address_line1:e.target.value})}/></div>
-          <div><Label>Address line 2</Label><Input value={form.address_line2} onChange={(e)=>setForm({...form,address_line2:e.target.value})}/></div>
+          {limitReached ? (
+            <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-900">
+              You have reached your allowed property limit for this plan. Upgrade to add more properties.
+            </div>
+          ) : null}
+          <div><Label>Address line 1</Label><Input value={form.address_line1} onChange={(e)=>setForm({...form,address_line1:e.target.value})} disabled={limitReached}/></div>
+          <div><Label>Address line 2</Label><Input value={form.address_line2} onChange={(e)=>setForm({...form,address_line2:e.target.value})} disabled={limitReached}/></div>
           <div className="grid grid-cols-2 gap-3">
-            <div><Label>City</Label><Input value={form.city} onChange={(e)=>setForm({...form,city:e.target.value})}/></div>
-            <div><Label>Postcode</Label><Input value={form.postcode} onChange={(e)=>setForm({...form,postcode:e.target.value})}/></div>
+            <div><Label>City</Label><Input value={form.city} onChange={(e)=>setForm({...form,city:e.target.value})} disabled={limitReached}/></div>
+            <div><Label>Postcode</Label><Input value={form.postcode} onChange={(e)=>setForm({...form,postcode:e.target.value})} disabled={limitReached}/></div>
           </div>
         </div>
-        <DialogFooter>
-          <Button onClick={submit} disabled={loading || !form.address_line1} className="bg-brand-500 hover:bg-brand-600">{loading ? <Loader2 className="h-4 w-4 animate-spin"/> : 'Add property'}</Button>
+        <DialogFooter className="flex flex-col gap-3">
+          {limitReached ? (
+            <Button onClick={() => window.location.href = '/#pricing'} className="w-full bg-brand-500 hover:bg-brand-600 text-white">Upgrade plan</Button>
+          ) : (
+            <Button onClick={submit} disabled={loading || !form.address_line1} className="bg-brand-500 hover:bg-brand-600">{loading ? <Loader2 className="h-4 w-4 animate-spin"/> : 'Add property'}</Button>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -1708,7 +1719,7 @@ function Dashboard({ user, profile, onSignOut, loc, updateLoc }) {
           <TabsContent value="properties">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-semibold">{t('properties', lang)}</h2>
-              {profile?.role === 'landlord' && <PropertyCreateDialog onCreated={loadAll}/>}
+              {profile?.role === 'landlord' && <PropertyCreateDialog onCreated={loadAll} planInfo={planInfo} currentCount={properties.length}/>}
             </div>
             {loading ? (
               <div className="flex items-center justify-center py-12 text-slate-500"><Loader2 className="h-5 w-5 animate-spin mr-2"/>Loading...</div>
