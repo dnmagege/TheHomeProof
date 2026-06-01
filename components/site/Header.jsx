@@ -1,6 +1,7 @@
 "use client";
 
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { Menu } from 'lucide-react';
@@ -23,8 +24,22 @@ export function SiteHeader({
   ctaLabel = 'Get started',
   ctaHref = '/',
 }) {
+  const pathname = usePathname();
   const showActions = Boolean(onGetStarted || onSignIn);
   const hasSettings = Boolean(loc && onUpdate);
+
+  const handleNavClick = (event, href) => {
+    if (pathname === '/' && href.startsWith('/#')) {
+      event.preventDefault();
+      const targetId = href.replace('/#', '');
+      const target = document.getElementById(targetId);
+      if (target) {
+        target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      } else {
+        window.location.href = href;
+      }
+    }
+  };
 
   return (
     <nav className="border-b border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/80 backdrop-blur sticky top-0 z-30">
@@ -37,7 +52,13 @@ export function SiteHeader({
 
         <div className="hidden lg:flex items-center gap-6 text-sm font-medium text-slate-700 dark:text-slate-300">
           {navLinks.map((link) => (
-            <Link key={link.href} href={link.href} className="hover:text-brand-600 transition-colors">
+            <Link
+              key={link.href}
+              href={link.href}
+              scroll={false}
+              className="hover:text-brand-600 transition-colors"
+              onClick={(event) => handleNavClick(event, link.href)}
+            >
               {link.label}
             </Link>
           ))}
@@ -77,7 +98,13 @@ export function SiteHeader({
                   <img src="/logo.png" alt="HomeProof" className="h-20 w-auto scale-150 origin-left mb-2" />
                 </Link>
                 {navLinks.map((link) => (
-                  <Link key={link.href} href={link.href} className="text-base font-medium text-slate-800 dark:text-slate-200 hover:text-brand-600">
+                  <Link
+                    key={link.href}
+                    href={link.href}
+                    scroll={false}
+                    className="text-base font-medium text-slate-800 dark:text-slate-200 hover:text-brand-600"
+                    onClick={(event) => handleNavClick(event, link.href)}
+                  >
                     {link.label}
                   </Link>
                 ))}
