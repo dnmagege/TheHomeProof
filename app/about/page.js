@@ -11,7 +11,7 @@ export default function AboutPage() {
           <div className="space-y-4">
             <p className="text-sm font-semibold uppercase tracking-[0.25em] text-brand-600">About HomeProof</p>
             <h1 className="text-4xl md:text-5xl font-bold">Proof for every part of your tenancy.</h1>
-            <p className="text-lg text-slate-600 dark:text-slate-400">HomeProof helps landlords, agents and tenants manage tenancies with confidence. We combine AI inventory generation, contract analysis, damage tracking, secure storage, and legal evidence workflows into one platform.</p>
+            <p className="text-lg text-slate-600 dark:text-slate-400">HomeProof helps landlords and tenants manage tenancies with confidence. We combine AI inventory generation, contract analysis, damage tracking, secure storage, and legal evidence workflows into one platform.</p>
           </div>
 
           <section className="grid gap-8 md:grid-cols-2">
