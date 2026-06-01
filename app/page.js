@@ -126,6 +126,7 @@ function Landing({ onGetStarted, onSignIn, loc, updateLoc }) {
             {[
               {title:'Inventory & evidence in minutes', desc:'AI auto-tags rooms, items and damage for fast, tribunal-ready reporting.'},
               {title:'Tenant-friendly workflows', desc:'Invite tenants, share documents and resolve disputes together.'},
+              {title:'Team & agency workflows', desc:'Support landlords, agents and portfolio managers with shared access and role-based controls.'},
               {title:'Trusted compliance engine', desc:'Track contracts, rent offers and move-in records in one secure place.'},
             ].map((item, idx) => (
               <div key={idx} className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
@@ -192,7 +193,7 @@ function Landing({ onGetStarted, onSignIn, loc, updateLoc }) {
             {[
               {name:'Free', price:'£0', period:'forever', features:['1 property', '10 AI runs / month', 'All AI tools', 'Multi-language UI', 'Community support'], cta:'Start free', highlight:false},
               {name:'Pro', price:'£19', period:'/ month', features:['Up to 10 properties', '200 AI runs / month', 'PDF inventory exports', 'AI Dispute Evidence Builder', 'Email tenants', 'Priority support'], cta:'Start Pro', highlight:true},
-              {name:'Business', price:'£49', period:'/ month', features:['Up to 100 properties', '2000 AI runs / month', 'Audit logs export', 'Custom branding', 'API access', 'Dedicated account manager'], cta:'Contact sales', highlight:false},
+              {name:'Business', price:'£49', period:'/ month', features:['Team accounts & portfolio access', 'White-label and brand control', 'Audit logs export', 'Custom compliance workflows', 'API access', 'Dedicated account manager'], cta:'Contact sales', highlight:false},
             ].map((p, i) => (
               <Card key={i} className={`relative ${p.highlight ? 'border-brand-500 border-2 shadow-2xl md:scale-105' : 'border-slate-200 dark:border-slate-800'}`}>
                 {p.highlight && <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-brand-500 text-white text-xs font-bold px-3 py-1 rounded-full">MOST POPULAR</div>}
@@ -338,6 +339,7 @@ function AuthPage({ mode, setMode, onSuccess, onBack, loc }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
+  const [company, setCompany] = useState('');
   const [role, setRole] = useState('landlord');
   const [loading, setLoading] = useState(false);
   const [resetCooldown, setResetCooldown] = useState(0);
@@ -370,7 +372,7 @@ function AuthPage({ mode, setMode, onSuccess, onBack, loc }) {
         const res = await fetch('/api/auth/signup', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email, password, name, role }),
+          body: JSON.stringify({ email, password, name, role, company_name: company }),
         });
         const j = await res.json();
         if (!res.ok) throw new Error(j.error || 'Signup failed');
@@ -432,8 +434,15 @@ function AuthPage({ mode, setMode, onSuccess, onBack, loc }) {
                     <SelectContent>
                       <SelectItem value="landlord">{t('landlord', lang)}</SelectItem>
                       <SelectItem value="tenant">{t('tenant', lang)}</SelectItem>
+                      <SelectItem value="agent">{t('agent', lang) || 'Agency / agent'}</SelectItem>
+                      <SelectItem value="portfolio_manager">{t('portfolioManager', lang) || 'Portfolio manager'}</SelectItem>
                     </SelectContent>
                   </Select>
+                </div>
+                <div>
+                  <Label htmlFor="company">{t('companyName', lang)}</Label>
+                  <Input id="company" value={company} onChange={(e) => setCompany(e.target.value)} placeholder="Optional: company, agency or brand" />
+                  <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">Use a company name for team accounts, agency access, and portfolio-level onboarding.</p>
                 </div>
               </>)}
               <div>
@@ -1037,6 +1046,59 @@ function ComplianceTab({ properties }) {
   );
 }
 
+function AuditLogTab({ api }) {
+  const [logs, setLogs] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const r = await api('activity-logs');
+      setLogs(r.activity_logs || []);
+    } catch (e) {
+      toast.error(e.message);
+    } finally {
+      setLoading(false);
+    }
+  }, [api]);
+
+  useEffect(() => { load(); }, [load]);
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2"><ShieldCheck className="h-5 w-5 text-slate-700"/>Audit trail</CardTitle>
+        <CardDescription>See recent portfolio activity and audit events for your properties.</CardDescription>
+      </CardHeader>
+      <CardContent>
+        {loading ? (
+          <div className="flex items-center justify-center py-8 text-slate-500"><Loader2 className="h-5 w-5 animate-spin mr-2"/>Loading activity...</div>
+        ) : logs.length === 0 ? (
+          <div className="text-center py-10 text-slate-500">No recent activity logged yet.</div>
+        ) : (
+          <div className="space-y-3">
+            {logs.map((log) => (
+              <div key={log.id} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">{log.action.replace(/_/g, ' ')}</div>
+                    <div className="text-xs text-slate-500 dark:text-slate-400">{log.created_at ? new Date(log.created_at).toLocaleString() : 'No timestamp'}</div>
+                  </div>
+                  <Badge variant="outline" className="capitalize">{log.entity_type || 'activity'}</Badge>
+                </div>
+                <div className="mt-3 text-sm text-slate-600 dark:text-slate-300">
+                  {log.property ? `${log.property.address_line1 || ''}${log.property.postcode ? ` · ${log.property.postcode}` : ''}` : `Property: ${log.property_id || 'N/A'}`}
+                </div>
+                <div className="mt-2 text-sm text-slate-600 dark:text-slate-300">User: {log.user?.name || log.user?.email || log.user_id || 'Unknown'}</div>
+              </div>
+            ))}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 function IssuesTab({ properties, profile }) {
   const [issues, setIssues] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -1601,6 +1663,17 @@ function Dashboard({ user, profile, onSignOut, loc, updateLoc }) {
   const [loading, setLoading] = useState(true);
   const [copilotOpen, setCopilotOpen] = useState(false);
 
+  const roleLabel = profile?.role === 'landlord'
+    ? t('landlord', lang)
+    : profile?.role === 'tenant'
+      ? t('tenant', lang)
+      : profile?.role === 'agent'
+        ? t('agent', lang) || 'Agency'
+        : profile?.role === 'portfolio_manager'
+          ? t('portfolioManager', lang) || 'Portfolio manager'
+          : profile?.role;
+  const companyName = user?.user_metadata?.company_name;
+
   const loadPlanInfo = useCallback(async () => {
     try {
       const plan = await api('user/plan');
@@ -1642,7 +1715,10 @@ function Dashboard({ user, profile, onSignOut, loc, updateLoc }) {
             <Link href="/" aria-label="Home">
               <img src="/logo.png" alt="HomeProof" className="h-24 w-auto scale-150 origin-left"/>
             </Link>
-            <Badge variant="outline" className="ml-2 capitalize">{profile?.role === 'landlord' ? t('landlord', lang) : t('tenant', lang)}</Badge>
+            <div className="flex flex-col gap-1">
+              <Badge variant="outline" className="ml-2 capitalize">{roleLabel}</Badge>
+              {companyName ? <div className="text-xs text-slate-500 dark:text-slate-400 ml-2">{companyName}</div> : null}
+            </div>
           </div>
           <div className="hidden md:flex items-center gap-2">
             <span className="text-sm text-slate-600 dark:text-slate-400 hidden sm:inline">{user.email}</span>
@@ -1713,13 +1789,14 @@ function Dashboard({ user, profile, onSignOut, loc, updateLoc }) {
             <TabsTrigger value="payments"><Calendar className="h-4 w-4 mr-2"/>Payments</TabsTrigger>
             <TabsTrigger value="chat"><MessageSquare className="h-4 w-4 mr-2"/>Chat</TabsTrigger>
             <TabsTrigger value="issues"><Wrench className="h-4 w-4 mr-2"/>{t('issues', lang)}</TabsTrigger>
-            {profile?.role === 'landlord' && <TabsTrigger value="compliance"><ShieldCheck className="h-4 w-4 mr-2"/>{t('compliance', lang)}</TabsTrigger>}
+            {['landlord','agent','portfolio_manager'].includes(profile?.role) && <TabsTrigger value="audit"><ShieldCheck className="h-4 w-4 mr-2"/>{t('audit', lang) || 'Audit'}</TabsTrigger>}
+            {['landlord','agent','portfolio_manager'].includes(profile?.role) && <TabsTrigger value="compliance"><ShieldCheck className="h-4 w-4 mr-2"/>{t('compliance', lang)}</TabsTrigger>}
           </TabsList>
 
           <TabsContent value="properties">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-semibold">{t('properties', lang)}</h2>
-              {profile?.role === 'landlord' && <PropertyCreateDialog onCreated={loadAll} planInfo={planInfo} currentCount={properties.length}/>}
+              {['landlord','agent','portfolio_manager'].includes(profile?.role) && <PropertyCreateDialog onCreated={loadAll} planInfo={planInfo} currentCount={properties.length}/>}
             </div>
             {loading ? (
               <div className="flex items-center justify-center py-12 text-slate-500"><Loader2 className="h-5 w-5 animate-spin mr-2"/>Loading...</div>
@@ -1751,7 +1828,8 @@ function Dashboard({ user, profile, onSignOut, loc, updateLoc }) {
           <TabsContent value="receipts"><ReceiptsTab api={api} profile={profile} /></TabsContent>
           <TabsContent value="profile"><ProfileTab api={api} profile={profile} /></TabsContent>
           <TabsContent value="issues"><IssuesTab properties={properties} profile={profile}/></TabsContent>
-          {profile?.role === 'landlord' && <TabsContent value="compliance"><ComplianceTab properties={properties}/></TabsContent>}
+          {['landlord','agent','portfolio_manager'].includes(profile?.role) && <TabsContent value="compliance"><ComplianceTab properties={properties}/></TabsContent>}
+          {['landlord','agent','portfolio_manager'].includes(profile?.role) && <TabsContent value="audit"><AuditLogTab api={api}/></TabsContent>}
         </Tabs>
       </div>
       <div className="fixed right-6 bottom-6 z-50 flex flex-col items-end">

@@ -576,14 +576,14 @@ async function handle(request, { params }) {
     // Public: signup (auto-confirms email for smooth MVP UX)
     if (path === 'auth/signup' && method === 'POST') {
       const body = await request.json();
-      const { email, password, name, role } = body;
+      const { email, password, name, role, company_name } = body;
       if (!email || !password) return json({ error: 'email and password required' }, 400);
       const admin = getSupabaseAdmin();
       const { data, error } = await admin.auth.admin.createUser({
         email,
         password,
         email_confirm: true,
-        user_metadata: { name: name || '', role: role || 'tenant' },
+        user_metadata: { name: name || '', role: role || 'tenant', company_name: company_name || null },
       });
       if (error) return json({ error: error.message }, 400);
       return json({ user: data.user });
@@ -734,8 +734,19 @@ async function handle(request, { params }) {
     }
 
     // ===== PROFILE =====
+    if (path === 'activity-logs' && method === 'GET') {
+      if (!isManagerRole(profile?.role)) return json({ error: 'Unauthorized' }, 403);
+      const { data, error } = await admin
+        .from('activity_logs')
+        .select('*, user:profiles(name,email), property:properties(address_line1,postcode)')
+        .order('created_at', { ascending: false })
+        .limit(30);
+      if (error) return json({ error: error.message }, 500);
+      return json({ activity_logs: data });
+    }
+
     if (path === 'me' && method === 'GET') {
-      return json({ user: { id: user.id, email: user.email }, profile });
+      return json({ user: { id: user.id, email: user.email, user_metadata: user.user_metadata }, profile });
     }
 
     if (path === 'me' && method === 'PATCH') {
@@ -755,7 +766,7 @@ async function handle(request, { params }) {
     // ===== PROPERTIES =====
     if (path === 'properties' && method === 'GET') {
       let q = admin.from('properties').select('*').order('created_at', { ascending: false });
-      if (profile?.role === 'landlord') q = q.eq('landlord_id', user.id);
+      if (isManagerRole(profile?.role)) q = q.eq('landlord_id', user.id);
       else {
         // tenants: include properties linked by tenant_id or by invited tenant_email
         const email = user.email?.trim().toLowerCase();
@@ -776,7 +787,7 @@ async function handle(request, { params }) {
     }
 
     if (path === 'properties' && method === 'POST') {
-      if (profile?.role !== 'landlord') return json({ error: 'Only landlords can create properties' }, 403);
+      if (!isManagerRole(profile?.role)) return json({ error: 'Only landlords, agents, or portfolio managers can create properties' }, 403);
       await ensurePropertyCreationAllowed(admin, user.id);
       const body = await request.json();
       const { data, error } = await admin
@@ -815,7 +826,7 @@ async function handle(request, { params }) {
 
     // ===== TENANCIES =====
     if (path === 'tenancies' && method === 'POST') {
-      if (profile?.role !== 'landlord') return json({ error: 'Only landlords can create tenancies' }, 403);
+      if (!isManagerRole(profile?.role)) return json({ error: 'Only landlords, agents, or portfolio managers can create tenancies' }, 403);
       const body = await request.json();
       // optional: link tenant by email
       let tenant_id = null;
@@ -1364,7 +1375,7 @@ async function handle(request, { params }) {
 
     // ===== COMPLIANCE =====
     if (path === 'compliance' && method === 'GET') {
-      // Get all compliance items for landlord's properties
+      // Get all compliance items for landlord or manager properties
       const { data: props } = await admin.from('properties').select('id').eq('landlord_id', user.id);
       const propIds = (props || []).map(p => p.id);
       if (propIds.length === 0) return json({ compliance: [] });
