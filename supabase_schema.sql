@@ -18,11 +18,13 @@ create table if not exists public.profiles (
 create table if not exists public.properties (
   id uuid primary key default uuid_generate_v4(),
   landlord_id uuid not null references public.profiles(id) on delete cascade,
+  name text,
   address_line1 text not null,
   address_line2 text,
   city text,
   postcode text,
   country text default 'UK',
+  photo_urls jsonb default '[]',
   created_at timestamptz default now()
 );
 

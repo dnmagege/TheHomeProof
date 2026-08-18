@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useLayoutEffect, useState, useRef } from 'react';
 import { useTheme } from 'next-themes';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -256,7 +256,10 @@ export function AICoPilot({ loc, api }) {
   const endRef = useRef(null);
 
   useEffect(() => { localStorage.setItem('tenantai_chat', JSON.stringify(messages.slice(-50))); }, [messages]);
-  useEffect(() => { endRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages, loading]);
+  useLayoutEffect(() => {
+    if (!endRef.current) return;
+    endRef.current.scrollIntoView({ behavior: 'smooth', block: 'end' });
+  }, [messages, loading]);
 
   async function send() {
     const text = input.trim();
@@ -280,7 +283,7 @@ export function AICoPilot({ loc, api }) {
   ];
 
   return (
-    <Card className="h-[600px] flex flex-col">
+    <Card className="h-full flex flex-col">
       <CardHeader>
         <div className="flex items-center justify-between">
           <div>
@@ -290,8 +293,8 @@ export function AICoPilot({ loc, api }) {
           {messages.length > 0 && <Button variant="ghost" size="sm" onClick={clearChat}>Clear</Button>}
         </div>
       </CardHeader>
-      <CardContent className="flex-1 flex flex-col gap-3 overflow-hidden">
-        <div className="flex-1 overflow-y-auto space-y-3 pr-2">
+      <CardContent className="flex-1 min-h-0 flex flex-col gap-3 overflow-hidden">
+        <div className="flex-1 min-h-0 overflow-y-auto space-y-3 pr-2 pb-2">
           {messages.length === 0 && (
             <div className="text-center py-8">
               <Bot className="h-12 w-12 mx-auto mb-3 text-violet-300"/>
@@ -305,21 +308,21 @@ export function AICoPilot({ loc, api }) {
           )}
           {messages.map((m, i) => (
             <div key={i} className={`flex gap-2 ${m.role === 'user' ? 'justify-end' : ''}`}>
-              {m.role === 'assistant' && <div className="h-7 w-7 rounded-full bg-violet-100 text-violet-600 flex items-center justify-center flex-shrink-0"><Bot className="h-4 w-4"/></div>}
-              <div className={`max-w-[75%] rounded-2xl px-4 py-2 text-sm whitespace-pre-wrap ${m.role === 'user' ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-900'}`}>{m.content}</div>
-              {m.role === 'user' && <div className="h-7 w-7 rounded-full bg-blue-100 text-brand-600 flex items-center justify-center flex-shrink-0"><User className="h-4 w-4"/></div>}
+              {m.role === 'assistant' && <div className="h-7 w-7 rounded-full bg-violet-100 text-violet-600 dark:bg-violet-900 dark:text-violet-200 flex items-center justify-center flex-shrink-0"><Bot className="h-4 w-4"/></div>}
+              <div className={`max-w-[75%] rounded-2xl px-4 py-2 text-sm whitespace-pre-wrap ${m.role === 'user' ? 'bg-blue-600 text-white dark:bg-blue-700' : 'bg-slate-100 text-slate-900 dark:bg-slate-800 dark:text-slate-100'}`}>{m.content}</div>
+              {m.role === 'user' && <div className="h-7 w-7 rounded-full bg-blue-100 text-brand-600 dark:bg-blue-900 dark:text-blue-200 flex items-center justify-center flex-shrink-0"><User className="h-4 w-4"/></div>}
             </div>
           ))}
           {loading && (
             <div className="flex gap-2">
-              <div className="h-7 w-7 rounded-full bg-violet-100 text-violet-600 flex items-center justify-center"><Bot className="h-4 w-4"/></div>
-              <div className="bg-slate-100 rounded-2xl px-4 py-2 text-sm flex gap-1"><span className="animate-pulse">●</span><span className="animate-pulse delay-100">●</span><span className="animate-pulse delay-200">●</span></div>
+              <div className="h-7 w-7 rounded-full bg-violet-100 text-violet-600 dark:bg-violet-900 dark:text-violet-200 flex items-center justify-center"><Bot className="h-4 w-4"/></div>
+              <div className="bg-slate-100 rounded-2xl px-4 py-2 text-sm flex gap-1 dark:bg-slate-800"><span className="animate-pulse">●</span><span className="animate-pulse delay-100">●</span><span className="animate-pulse delay-200">●</span></div>
             </div>
           )}
           <div ref={endRef}/>
         </div>
-        <div className="flex gap-2 border-t pt-3">
-          <Input placeholder={t('typeMessage', lang)} value={input} onChange={(e)=>setInput(e.target.value)} onKeyDown={(e)=> e.key === 'Enter' && send()} disabled={loading}/>
+        <div className="flex-shrink-0 sticky bottom-0 flex gap-2 border-t border-slate-200 dark:border-slate-800 pt-3 bg-white/95 dark:bg-slate-950/95">
+          <Input placeholder={t('typeMessage', lang)} value={input} onChange={(e)=>setInput(e.target.value)} onKeyDown={(e)=> { if (e.key === 'Enter') { e.preventDefault(); send(); } }} disabled={loading}/>
           <Button onClick={send} disabled={loading || !input.trim()} className="bg-violet-600 hover:bg-violet-700"><Send className="h-4 w-4"/></Button>
         </div>
       </CardContent>

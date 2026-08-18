@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { useEffect, useState, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 import { getSupabaseClient } from '@/lib/supabaseClient';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -359,6 +360,7 @@ function AuthPage({ mode, setMode, onSuccess, onBack, loc }) {
     if (invite) {
       setInviteEmail(invite);
       setEmail((current) => current || invite);
+      setRole('tenant');
     }
   }, []);
 
@@ -478,8 +480,9 @@ function AuthPage({ mode, setMode, onSuccess, onBack, loc }) {
 }
 
 function PropertyCreateDialog({ onCreated, planInfo, currentCount }) {
+  const router = useRouter();
   const [open, setOpen] = useState(false);
-  const [form, setForm] = useState({ address_line1: '', address_line2: '', city: '', postcode: '', country: 'UK' });
+  const [form, setForm] = useState({ name: '', address_line1: '', address_line2: '', city: '', postcode: '', country: 'UK' });
   const [loading, setLoading] = useState(false);
   const maxProperties = planInfo?.max_properties;
   const limitReached = typeof maxProperties === 'number' && currentCount >= maxProperties;
@@ -490,37 +493,238 @@ function PropertyCreateDialog({ onCreated, planInfo, currentCount }) {
       await api('properties', { method: 'POST', body: JSON.stringify(form) });
       toast.success('Property added');
       setOpen(false);
-      setForm({ address_line1: '', address_line2: '', city: '', postcode: '', country: 'UK' });
+      setForm({ name: '', address_line1: '', address_line2: '', city: '', postcode: '', country: 'UK' });
       onCreated();
     } catch (e) { toast.error(e.message); } finally { setLoading(false); }
+  }
+
+  if (limitReached) {
+    return (
+      <Button
+        className="bg-brand-500 hover:bg-brand-600"
+        type="button"
+        title="Upgrade your plan to add more properties"
+        onClick={() => router.push('/upgrade')}
+      >
+        <Plus className="h-4 w-4 mr-2"/>Upgrade plan
+      </Button>
+    );
   }
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button className="bg-brand-500 hover:bg-brand-600" disabled={limitReached}><Plus className="h-4 w-4 mr-2"/>{limitReached ? 'Limit reached' : 'Add property'}</Button>
+        <Button className="bg-brand-500 hover:bg-brand-600" type="button"><Plus className="h-4 w-4 mr-2"/>Add property</Button>
       </DialogTrigger>
       <DialogContent>
         <DialogHeader><DialogTitle>Add a property</DialogTitle></DialogHeader>
         <div className="space-y-3">
-          {limitReached ? (
-            <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-900">
-              You have reached your allowed property limit for this plan. Upgrade to add more properties.
-            </div>
-          ) : null}
-          <div><Label>Address line 1</Label><Input value={form.address_line1} onChange={(e)=>setForm({...form,address_line1:e.target.value})} disabled={limitReached}/></div>
-          <div><Label>Address line 2</Label><Input value={form.address_line2} onChange={(e)=>setForm({...form,address_line2:e.target.value})} disabled={limitReached}/></div>
+          <div><Label>Property name</Label><Input value={form.name} onChange={(e)=>setForm({...form,name:e.target.value})} /></div>
+          <div><Label>Address line 1</Label><Input value={form.address_line1} onChange={(e)=>setForm({...form,address_line1:e.target.value})} /></div>
+          <div><Label>Address line 2</Label><Input value={form.address_line2} onChange={(e)=>setForm({...form,address_line2:e.target.value})} /></div>
           <div className="grid grid-cols-2 gap-3">
-            <div><Label>City</Label><Input value={form.city} onChange={(e)=>setForm({...form,city:e.target.value})} disabled={limitReached}/></div>
-            <div><Label>Postcode</Label><Input value={form.postcode} onChange={(e)=>setForm({...form,postcode:e.target.value})} disabled={limitReached}/></div>
+            <div><Label>City</Label><Input value={form.city} onChange={(e)=>setForm({...form,city:e.target.value})} /></div>
+            <div><Label>Postcode</Label><Input value={form.postcode} onChange={(e)=>setForm({...form,postcode:e.target.value})} /></div>
           </div>
         </div>
         <DialogFooter className="flex flex-col gap-3">
-          {limitReached ? (
-            <Button onClick={() => window.location.href = '/#pricing'} className="w-full bg-brand-500 hover:bg-brand-600 text-white">Upgrade plan</Button>
-          ) : (
-            <Button onClick={submit} disabled={loading || !form.address_line1} className="bg-brand-500 hover:bg-brand-600">{loading ? <Loader2 className="h-4 w-4 animate-spin"/> : 'Add property'}</Button>
-          )}
+          <Button onClick={submit} disabled={loading || !form.name || !form.address_line1} className="bg-brand-500 hover:bg-brand-600">{loading ? <Loader2 className="h-4 w-4 animate-spin"/> : 'Add property'}</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function PropertyEditDialog({ property, onSaved }) {
+  const [open, setOpen] = useState(false);
+  const [form, setForm] = useState({
+    name: property.name || '',
+    address_line1: property.address_line1 || '',
+    address_line2: property.address_line2 || '',
+    city: property.city || '',
+    postcode: property.postcode || '',
+    country: property.country || 'UK',
+  });
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    setForm({
+      name: property.name || '',
+      address_line1: property.address_line1 || '',
+      address_line2: property.address_line2 || '',
+      city: property.city || '',
+      postcode: property.postcode || '',
+      country: property.country || 'UK',
+    });
+  }, [property]);
+
+  async function submit() {
+    setLoading(true);
+    try {
+      await api(`properties/${property.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(form),
+      });
+      toast.success('Property updated');
+      setOpen(false);
+      onSaved();
+    } catch (e) {
+      toast.error(e.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={(value) => {
+      setOpen(value);
+      if (value) {
+        setForm({
+          name: property.name || '',
+          address_line1: property.address_line1 || '',
+          address_line2: property.address_line2 || '',
+          city: property.city || '',
+          postcode: property.postcode || '',
+          country: property.country || 'UK',
+        });
+      }
+    }}>
+      <DialogTrigger asChild>
+        <Button variant="outline" size="sm"><Wrench className="h-4 w-4 mr-2"/>Edit</Button>
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader><DialogTitle>Edit property</DialogTitle></DialogHeader>
+        <div className="space-y-3">
+          <div><Label>Property name</Label><Input value={form.name} onChange={(e)=>setForm({...form,name:e.target.value})} /></div>
+          <div><Label>Address line 1</Label><Input value={form.address_line1} onChange={(e)=>setForm({...form,address_line1:e.target.value})} /></div>
+          <div><Label>Address line 2</Label><Input value={form.address_line2} onChange={(e)=>setForm({...form,address_line2:e.target.value})} /></div>
+          <div className="grid grid-cols-2 gap-3">
+            <div><Label>City</Label><Input value={form.city} onChange={(e)=>setForm({...form,city:e.target.value})} /></div>
+            <div><Label>Postcode</Label><Input value={form.postcode} onChange={(e)=>setForm({...form,postcode:e.target.value})} /></div>
+          </div>
+        </div>
+        <DialogFooter className="flex flex-col gap-3">
+          <Button onClick={submit} disabled={loading || !form.name || !form.address_line1} className="bg-brand-500 hover:bg-brand-600">
+            {loading ? <Loader2 className="h-4 w-4 animate-spin"/> : 'Save changes'}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function PropertyPhotosDialog({ property, detail, onSaved }) {
+  const [open, setOpen] = useState(false);
+  const [files, setFiles] = useState([]);
+  const [previews, setPreviews] = useState([]);
+  const [currentUrls, setCurrentUrls] = useState(detail?.property?.photo_urls || property.photo_urls || []);
+  const [loading, setLoading] = useState(false);
+  const minPhotos = 5;
+  const maxPhotos = 10;
+  const currentCount = currentUrls.length;
+  const totalCount = currentCount + files.length;
+  const atMaxPhotos = currentCount >= maxPhotos;
+
+  useEffect(() => {
+    setCurrentUrls(detail?.property?.photo_urls || property.photo_urls || []);
+  }, [detail?.property?.photo_urls, property.photo_urls]);
+
+  function onFilesChange(e) {
+    const arr = Array.from(e.target.files || []);
+    const allowed = arr.slice(0, Math.max(0, maxPhotos - currentCount));
+    if (allowed.length < arr.length) {
+      toast.error(`You can upload up to ${maxPhotos} photos total. Extra files were ignored.`);
+    }
+    setFiles(allowed);
+    setPreviews(allowed.map((file) => URL.createObjectURL(file)));
+  }
+
+  function removeUrl(index) {
+    setCurrentUrls((urls) => urls.filter((_, i) => i !== index));
+  }
+
+  async function submit() {
+    if (files.length === 0 && currentUrls.length === 0) {
+      toast.error(`Add at least ${minPhotos} photos to save`);
+      return;
+    }
+    if (totalCount < minPhotos) {
+      toast.error(`Please upload at least ${minPhotos} photos in total.`);
+      return;
+    }
+    if (totalCount > maxPhotos) {
+      toast.error(`You can upload at most ${maxPhotos} photos total.`);
+      return;
+    }
+    setLoading(true);
+    try {
+      const uploadedUrls = [];
+      for (const file of files) {
+        const uploaded = await uploadToBucket('property-photos', file);
+        uploadedUrls.push(uploaded.url);
+      }
+      const updatedUrls = [...currentUrls, ...uploadedUrls];
+      await api(`properties/${property.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ photo_urls: updatedUrls }),
+      });
+      toast.success('Property photos updated');
+      setOpen(false);
+      setFiles([]);
+      setPreviews([]);
+      onSaved();
+    } catch (e) {
+      toast.error(e.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button variant="outline" size="sm"><Camera className="h-4 w-4 mr-2"/>Manage photos</Button>
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader><DialogTitle>Manage property photos</DialogTitle></DialogHeader>
+        <div className="space-y-4">
+          <div>
+            <Label>Current photos</Label>
+            {currentUrls.length > 0 ? (
+              <div className="grid grid-cols-2 gap-2">
+                {currentUrls.map((url, index) => (
+                  <div key={index} className="relative overflow-hidden rounded-lg border">
+                    <img src={url} alt={`Photo ${index + 1}`} className="h-28 w-full object-cover" />
+                    <button type="button" onClick={() => removeUrl(index)} className="absolute top-2 right-2 rounded-full bg-black/70 p-1 text-white">
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-slate-500">No photos uploaded yet.</p>
+            )}
+          </div>
+          <div>
+            <Label>Upload new photos</Label>
+            <p className="text-sm text-slate-500 mb-2">Total photos: {currentCount} uploaded, {files.length} selected. Minimum {minPhotos}, maximum {maxPhotos}.</p>
+            <Input type="file" accept="image/*" multiple onChange={onFilesChange} disabled={atMaxPhotos} />
+            {atMaxPhotos && (
+              <p className="mt-2 text-sm text-red-600">You have reached the maximum of {maxPhotos} photos. Remove one before adding more.</p>
+            )}
+            {previews.length > 0 && (
+              <div className="grid grid-cols-3 gap-2 mt-3">
+                {previews.map((src, index) => (
+                  <img key={index} src={src} alt={`Preview ${index + 1}`} className="h-24 w-full object-cover rounded" />
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+        <DialogFooter className="flex flex-col gap-3">
+          <Button onClick={submit} disabled={loading} className="bg-brand-500 hover:bg-brand-600">
+            {loading ? <Loader2 className="h-4 w-4 animate-spin"/> : 'Save photos'}
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -862,10 +1066,17 @@ function TenancyDialog({ propertyId, onCreated }) {
   async function submit() {
     setLoading(true);
     try {
-      await api('tenancies', { method: 'POST', body: JSON.stringify({ ...form, property_id: propertyId, rent_amount: parseFloat(form.rent_amount)||null, deposit_amount: parseFloat(form.deposit_amount)||null }) });
+      const result = await api('tenancies', { method: 'POST', body: JSON.stringify({ ...form, property_id: propertyId, rent_amount: parseFloat(form.rent_amount)||null, deposit_amount: parseFloat(form.deposit_amount)||null }) });
       toast.success('Tenancy created');
+      if (result.warning) {
+        toast.error(result.warning);
+      }
       setOpen(false); onCreated();
-    } catch (e) { toast.error(e.message); } finally { setLoading(false); }
+    } catch (e) {
+      toast.error(e.message);
+    } finally {
+      setLoading(false);
+    }
   }
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -899,7 +1110,7 @@ function TenancyDialog({ propertyId, onCreated }) {
   );
 }
 
-function PropertyCard({ property, onChanged, loc }) {
+function PropertyCard({ property, onChanged, loc, profile }) {
   const [detail, setDetail] = useState(null);
   const load = useCallback(async () => { try { const r = await api(`properties/${property.id}`); setDetail(r); } catch(e){ toast.error(e.message); } }, [property.id]);
   useEffect(() => { load(); }, [load]);
@@ -907,8 +1118,8 @@ function PropertyCard({ property, onChanged, loc }) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-base">{property.address_line1}</CardTitle>
-        <CardDescription>{[property.city, property.postcode].filter(Boolean).join(' · ')}</CardDescription>
+        <CardTitle className="text-base">{property.name || property.address_line1}</CardTitle>
+        <CardDescription>{[property.address_line1, property.city, property.postcode].filter(Boolean).join(' · ')}</CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
         <div className="flex flex-wrap gap-2 text-xs">
@@ -917,10 +1128,59 @@ function PropertyCard({ property, onChanged, loc }) {
           <Badge variant="outline">{detail?.contracts?.length || 0} contracts</Badge>
           <Badge variant="outline">{detail?.issues?.length || 0} issues</Badge>
         </div>
-        <TenancyDialog propertyId={property.id} onCreated={()=>{load(); onChanged();}}/>
+        {detail?.property?.photo_urls?.length > 0 ? (
+          <div className="grid grid-cols-2 gap-2">
+            {detail.property.photo_urls.map((url, index) => (
+              <img key={index} src={url} alt={`Property ${index + 1}`} className="h-24 w-full rounded-lg object-cover border" />
+            ))}
+          </div>
+        ) : (
+          <div className="text-sm text-slate-500">No property photos yet.</div>
+        )}
+        <div className="flex flex-wrap gap-2">
+          {profile?.role === 'landlord' ? <PropertyEditDialog property={property} onSaved={() => { load(); onChanged(); }} /> : null}
+          {profile?.role === 'landlord' ? <PropertyPhotosDialog property={property} detail={detail} onSaved={() => { load(); onChanged(); }} /> : null}
+          <TenancyDialog propertyId={property.id} onCreated={()=>{load(); onChanged();}}/>
+          {profile?.role === 'landlord' ? (
+            <Button variant="outline" size="sm" type="button" onClick={async () => {
+              if (!confirm('Delete this property? This will remove all linked tenancies, inspections, contracts and issues.')) return;
+              try {
+                await api(`properties/${property.id}`, { method: 'DELETE' });
+                toast.success('Property deleted');
+                onChanged();
+              } catch (error) {
+                toast.error(error.message || 'Unable to delete property');
+              }
+            }}>
+              <Trash2 className="h-4 w-4 text-slate-400"/>Remove
+            </Button>
+          ) : null}
+        </div>
         {detail?.tenancies?.length > 0 && (
-          <div className="text-xs text-slate-600 dark:text-slate-400 space-y-1">
-            {detail.tenancies.map(t => <div key={t.id} className="border rounded p-2">Tenant: {t.tenant_email||'—'} · {formatCurrency(t.rent_amount, loc?.currency || 'GBP', loc?.locale)}/{t.rent_frequency}</div>)}
+          <div className="text-xs text-slate-600 dark:text-slate-400 space-y-2">
+            {detail.tenancies.map(t => (
+              <div key={t.id} className="flex flex-col gap-2 rounded border p-3 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <div className="font-medium">Tenant: {t.tenant_email || '—'}</div>
+                  <div>{formatCurrency(t.rent_amount, loc?.currency || 'GBP', loc?.locale)}/{t.rent_frequency}</div>
+                </div>
+                {profile?.role === 'landlord' && (
+                  <Button variant="outline" size="sm" onClick={async () => {
+                    if (!confirm('Remove this tenant from the tenancy?')) return;
+                    try {
+                      await api(`tenancies/${t.id}`, { method: 'DELETE' });
+                      toast.success('Tenant removed');
+                      load();
+                      onChanged();
+                    } catch (error) {
+                      toast.error(error.message || 'Unable to remove tenant');
+                    }
+                  }}>
+                    <Trash2 className="h-4 w-4 text-slate-400"/>Remove
+                  </Button>
+                )}
+              </div>
+            ))}
           </div>
         )}
       </CardContent>
@@ -1428,6 +1688,44 @@ function PropertyLinksTab({ api, properties }) {
   );
 }
 
+function PropertyGalleryTab({ properties }) {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Property photo gallery</CardTitle>
+        <CardDescription>Browse uploaded property photos across your portfolio.</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-6">
+        {properties.length === 0 ? (
+          <div className="text-center py-12 text-slate-500">No properties available to show photos.</div>
+        ) : (
+          <div className="space-y-4">
+            {properties.map((property) => (
+              <Card key={property.id} className="border-slate-200">
+                <CardHeader>
+                  <CardTitle className="text-sm font-semibold">{property.address_line1}</CardTitle>
+                  <CardDescription>{[property.city, property.postcode].filter(Boolean).join(' · ')}</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {Array.isArray(property.photo_urls) && property.photo_urls.length > 0 ? (
+                    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                      {property.photo_urls.map((url, index) => (
+                        <img key={index} src={url} alt={`Property photo ${index + 1}`} className="h-44 w-full rounded-lg object-cover border" />
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-slate-500">No uploaded photos for this property. Use Manage photos on the property card to add them.</p>
+                  )}
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 function PaymentsTab({ api, profile, properties }) {
   const [payments, setPayments] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -1583,13 +1881,13 @@ function ChatTab({ api, profile, properties }) {
   }
 
   return (
-    <Card>
+    <Card className="h-full flex flex-col">
       <CardHeader>
         <CardTitle>Realtime chat</CardTitle>
         <CardDescription>Chat with the landlord or tenant for this property in real time.</CardDescription>
       </CardHeader>
-      <CardContent>
-        <div className="grid gap-4 mb-6">
+      <CardContent className="flex-1 min-h-0 flex flex-col gap-4 overflow-hidden">
+        <div className="grid gap-4 mb-6 flex-shrink-0">
           <div>
             <Label>Property</Label>
             <Select value={selectedPropertyId} onValueChange={(value) => setSelectedPropertyId(value)}>
@@ -1608,14 +1906,14 @@ function ChatTab({ api, profile, properties }) {
         ) : loading ? (
           <div className="text-center py-8 text-slate-500"><Loader2 className="inline-block h-5 w-5 animate-spin mr-2"/>Loading messages...</div>
         ) : (
-          <div className="flex flex-col gap-4">
-            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+          <div className="flex-1 min-h-0 flex flex-col gap-4 overflow-hidden">
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 flex-shrink-0">
               <div className="text-sm text-slate-500">Chat for</div>
               <div className="font-semibold text-slate-900">{activeProperty?.address_line1 || 'Selected property'}</div>
               {activeProperty?.postcode ? <div className="text-xs text-slate-500">{activeProperty.postcode}</div> : null}
             </div>
 
-            <div className="space-y-3 max-h-[420px] overflow-y-auto px-2 pb-2">
+            <div className="flex-1 min-h-0 overflow-y-auto space-y-3 px-2 pb-2">
               {messages.length === 0 ? (
                 <div className="text-center py-12 text-slate-500">No messages yet for this property.</div>
               ) : messages.map((message) => {
@@ -1632,7 +1930,7 @@ function ChatTab({ api, profile, properties }) {
               })}
             </div>
 
-            <div className="grid gap-3">
+            <div className="grid gap-3 flex-shrink-0 sticky bottom-0 bg-white/95 dark:bg-slate-950/95 border-t border-slate-200 dark:border-slate-800 pt-3">
               <Textarea rows={3} value={input} onChange={(e) => setInput(e.target.value)} placeholder="Type your message here..." />
               <div className="flex justify-end">
                 <Button onClick={sendMessage} disabled={sending} className="bg-brand-500 hover:bg-brand-600 text-white">
@@ -1648,6 +1946,7 @@ function ChatTab({ api, profile, properties }) {
 }
 
 function Dashboard({ user, profile, onSignOut, loc, updateLoc }) {
+  const router = useRouter();
   const lang = loc?.language || 'en';
   const [properties, setProperties] = useState([]);
   const [stats, setStats] = useState({ properties: 0, tenancies: 0, openIssues: 0, expiringCompliance: 0 });
@@ -1740,13 +2039,28 @@ function Dashboard({ user, profile, onSignOut, loc, updateLoc }) {
             <p className="text-slate-600 dark:text-slate-400 text-sm">{t('dashboardSubtitle', lang)}</p>
           </div>
           {planInfo && (
-            <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white/90 dark:bg-slate-900/90 px-4 py-3 shadow-sm text-sm text-slate-700 dark:text-slate-200">
-              <div className="font-semibold text-slate-900 dark:text-slate-100">Plan: {planInfo.plan}</div>
-              <div className="mt-1 grid grid-cols-1 gap-1 sm:grid-cols-2 text-xs text-slate-600 dark:text-slate-400">
-                <div>Properties: {properties.length}/{planInfo.max_properties ?? '∞'}</div>
-                <div>AI runs: {planInfo.ai_runs_used_this_month}/{planInfo.max_ai_runs_per_month ?? '∞'} this month</div>
+            <>
+              <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white/90 dark:bg-slate-900/90 px-4 py-3 shadow-sm text-sm text-slate-700 dark:text-slate-200">
+                <div className="font-semibold text-slate-900 dark:text-slate-100">Plan: {planInfo.plan}</div>
+                <div className="mt-1 grid grid-cols-1 gap-1 sm:grid-cols-2 text-xs text-slate-600 dark:text-slate-400">
+                  <div>Properties: {properties.length}/{planInfo.max_properties ?? '∞'}</div>
+                  <div>AI runs: {planInfo.ai_runs_used_this_month}/{planInfo.max_ai_runs_per_month ?? '∞'} this month</div>
+                </div>
               </div>
-            </div>
+              {(planInfo.status !== 'active' || (planInfo.current_period_end && new Date(planInfo.current_period_end) < new Date())) && (
+                <div className="rounded-2xl border border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-700 dark:bg-amber-950/60 dark:text-amber-200 px-4 py-3 mt-3 text-sm">
+                  <div className="font-semibold">Subscription notice</div>
+                  <p className="mt-1 text-sm text-amber-700 dark:text-amber-200">
+                    Your paid subscription has expired or is no longer active. You are currently on the Free plan, which keeps existing properties visible but limits new property creation and AI usage to the free tier.
+                  </p>
+                  {planInfo.cancel_at_period_end && planInfo.current_period_end && new Date(planInfo.current_period_end) > new Date() && (
+                    <p className="mt-1 text-sm text-amber-700 dark:text-amber-200">
+                      Your subscription will end on {new Date(planInfo.current_period_end).toLocaleDateString()}.
+                    </p>
+                  )}
+                </div>
+              )}
+            </>
           )}
         </div>
 
@@ -1772,6 +2086,7 @@ function Dashboard({ user, profile, onSignOut, loc, updateLoc }) {
             <TabsTrigger value="disputes"><Sparkles className="h-4 w-4 mr-2"/>Disputes</TabsTrigger>
             <TabsTrigger value="applications"><FileText className="h-4 w-4 mr-2"/>Applications</TabsTrigger>
             <TabsTrigger value="links"><ScanSearch className="h-4 w-4 mr-2"/>Saved links</TabsTrigger>
+            <TabsTrigger value="gallery"><Camera className="h-4 w-4 mr-2"/>Gallery</TabsTrigger>
             <TabsTrigger value="payments"><Calendar className="h-4 w-4 mr-2"/>Payments</TabsTrigger>
             <TabsTrigger value="chat"><MessageSquare className="h-4 w-4 mr-2"/>Chat</TabsTrigger>
             <TabsTrigger value="issues"><Wrench className="h-4 w-4 mr-2"/>{t('issues', lang)}</TabsTrigger>
@@ -1782,7 +2097,12 @@ function Dashboard({ user, profile, onSignOut, loc, updateLoc }) {
           <TabsContent value="properties">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-semibold">{t('properties', lang)}</h2>
-              {profile?.role === 'landlord' && <PropertyCreateDialog onCreated={loadAll} planInfo={planInfo} currentCount={properties.length}/>}
+              {profile?.role === 'landlord' && (
+                <div className="flex flex-wrap items-center gap-3">
+                  <PropertyCreateDialog onCreated={loadAll} planInfo={planInfo} currentCount={properties.length}/>
+                  <Button variant="outline" size="sm" type="button" onClick={() => router.push('/upgrade')}>Upgrade plan</Button>
+                </div>
+              )}
             </div>
             {loading ? (
               <div className="flex items-center justify-center py-12 text-slate-500"><Loader2 className="h-5 w-5 animate-spin mr-2"/>Loading...</div>
@@ -1793,7 +2113,7 @@ function Dashboard({ user, profile, onSignOut, loc, updateLoc }) {
               </CardContent></Card>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {properties.map(p => <PropertyCard key={p.id} property={p} onChanged={loadAll} loc={loc}/>)}
+                {properties.map(p => <PropertyCard key={p.id} property={p} onChanged={loadAll} loc={loc} profile={profile}/>)}
               </div>
             )}
           </TabsContent>
@@ -1806,6 +2126,7 @@ function Dashboard({ user, profile, onSignOut, loc, updateLoc }) {
           <TabsContent value="disputes"><AIDisputeBuilder properties={properties} loc={loc} api={api}/></TabsContent>
           <TabsContent value="applications"><ApplicationsTab api={api} profile={profile} properties={properties} /></TabsContent>
           <TabsContent value="links"><PropertyLinksTab api={api} properties={properties} /></TabsContent>
+          <TabsContent value="gallery"><PropertyGalleryTab properties={properties} /></TabsContent>
           <TabsContent value="payments"><PaymentsTab api={api} profile={profile} properties={properties} /></TabsContent>
           <TabsContent value="receipts"><ReceiptsTab api={api} profile={profile} /></TabsContent>
           <TabsContent value="chat"><ChatTab api={api} profile={profile} properties={properties} /></TabsContent>

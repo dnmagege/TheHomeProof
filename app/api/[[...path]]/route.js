@@ -41,6 +41,41 @@ function getAppBaseUrl() {
   return process.env.NEXT_PUBLIC_BASE_URL || process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
 }
 
+// Check if OpenAI API has funds and is accessible
+let lastOpenAiHealthCheck = 0;
+let lastOpenAiHealthStatus = { ok: true, message: '' };
+async function checkOpenAiHealth() {
+  const now = Date.now();
+  // Cache health check for 5 minutes
+  if (now - lastOpenAiHealthCheck < 5 * 60_000) {
+    return lastOpenAiHealthStatus;
+  }
+  
+  try {
+    // Make a minimal API call to check health
+    const response = await openai.models.retrieve('gpt-4o');
+    lastOpenAiHealthStatus = { ok: true, message: 'OpenAI API is accessible' };
+    lastOpenAiHealthCheck = now;
+    return lastOpenAiHealthStatus;
+  } catch (err) {
+    const errorMessage = err?.message || 'Unknown error';
+    let userMessage = 'AI service temporarily unavailable. Please try again later.';
+    
+    // Specific error messages
+    if (errorMessage.includes('insufficient_quota') || errorMessage.includes('insufficient funds')) {
+      userMessage = 'AI service is out of funds. Please contact support.';
+    } else if (errorMessage.includes('401') || errorMessage.includes('unauthorized')) {
+      userMessage = 'AI service configuration error. Please contact support.';
+    } else if (errorMessage.includes('429') || errorMessage.includes('rate_limit')) {
+      userMessage = 'AI service is temporarily overloaded. Please try again in a moment.';
+    }
+    
+    lastOpenAiHealthStatus = { ok: false, message: userMessage };
+    lastOpenAiHealthCheck = now;
+    return lastOpenAiHealthStatus;
+  }
+}
+
 function getPlanFromPriceId(priceId) {
   if (!priceId) return null;
   if (priceId === process.env.STRIPE_PRICE_PRO_MONTHLY || priceId === process.env.NEXT_PUBLIC_STRIPE_PRICE_PRO) return 'pro';
@@ -234,10 +269,15 @@ async function getUserSubscriptionDetails(admin, userId) {
     resetAt = now;
   }
 
+  const isExpired = sub.current_period_end ? new Date(sub.current_period_end) < new Date() : false;
+  const hasActiveStatus = ['active', 'trialing'].includes(sub.status);
+  const effectivePlan = hasActiveStatus && !isExpired ? normalizedPlan : FREE_PLAN_INFO;
+
   return {
-    plan: normalizedPlan,
+    plan: effectivePlan,
     plan_id: planId,
     status: sub.status || 'active',
+    effective_plan: effectivePlan,
     stripe_customer_id: sub.stripe_customer_id,
     stripe_subscription_id: sub.stripe_subscription_id,
     current_period_end: sub.current_period_end,
@@ -576,7 +616,8 @@ async function handle(request, { params }) {
     // Public: signup (auto-confirms email for smooth MVP UX)
     if (path === 'auth/signup' && method === 'POST') {
       const body = await request.json();
-      const { email, password, name, role } = body;
+      const email = (body?.email || '').trim().toLowerCase();
+      const { password, name, role } = body;
       if (!email || !password) return json({ error: 'email and password required' }, 400);
       const admin = getSupabaseAdmin();
       const { data, error } = await admin.auth.admin.createUser({
@@ -585,7 +626,16 @@ async function handle(request, { params }) {
         email_confirm: true,
         user_metadata: { name: name || '', role: role || 'tenant' },
       });
-      if (error) return json({ error: error.message }, 400);
+      if (error) return json({ error: 'Signup failed. Email may already be registered.' }, 400);
+      try {
+        await admin
+          .from('tenancies')
+          .update({ tenant_id: data.user.id })
+          .eq('tenant_email', email)
+          .is('tenant_id', null);
+      } catch (linkError) {
+        console.error('Failed to link invited tenancies during signup', linkError);
+      }
       return json({ user: data.user });
     }
 
@@ -593,6 +643,9 @@ async function handle(request, { params }) {
       const body = await request.json();
       const email = (body?.email || '').trim().toLowerCase();
       if (!email) return json({ error: 'email required' }, 400);
+      // Rate limit: 3 recovery attempts per hour per email
+      const r = rateLimit(`recover:${email}`, 3, 3600_000);
+      if (!r.allowed) return json({ error: 'Too many recovery attempts. Please try again later.' }, 429);
 
       const resetUrl = process.env.NEXT_PUBLIC_RESET_PASSWORD_URL || `${getAppBaseUrl()}/reset-password`;
       const admin = getSupabaseAdmin();
@@ -794,6 +847,7 @@ async function handle(request, { params }) {
         .from('properties')
         .insert({
           landlord_id: user.id,
+          name: body.name || null,
           address_line1: body.address_line1,
           address_line2: body.address_line2 || null,
           city: body.city || null,
@@ -824,17 +878,51 @@ async function handle(request, { params }) {
       return json({ property, tenancies: tenancies || [], inventories: inventories || [], inspections: inspections || [], issues: issues || [], compliance: compliance || [], contracts: contracts || [] });
     }
 
+    if (propMatch && method === 'PATCH') {
+      if (profile?.role !== 'landlord') return json({ error: 'Only landlords can modify properties' }, 403);
+      const id = propMatch[1];
+      const { data: existing, error: existingError } = await admin.from('properties').select('landlord_id, name, address_line1, address_line2, city, postcode, country, photo_urls').eq('id', id).maybeSingle();
+      if (existingError) return json({ error: existingError.message }, 500);
+      if (!existing) return json({ error: 'Not found' }, 404);
+      if (existing.landlord_id !== user.id) return json({ error: 'Not authorized' }, 403);
+      const body = await request.json();
+      const updates = {
+        name: body.name !== undefined ? body.name : existing.name,
+        address_line1: body.address_line1 || existing.address_line1,
+        address_line2: body.address_line2 !== undefined ? body.address_line2 : existing.address_line2,
+        city: body.city !== undefined ? body.city : existing.city,
+        postcode: body.postcode !== undefined ? body.postcode : existing.postcode,
+        country: body.country !== undefined ? body.country : existing.country,
+        photo_urls: body.photo_urls !== undefined ? body.photo_urls : existing.photo_urls,
+      };
+      const { data: updated, error: updateError } = await admin.from('properties').update(updates).eq('id', id).select().single();
+      if (updateError) return json({ error: updateError.message }, 400);
+      return json({ property: updated });
+    }
+
+    if (propMatch && method === 'DELETE') {
+      if (profile?.role !== 'landlord') return json({ error: 'Only landlords can delete properties' }, 403);
+      const id = propMatch[1];
+      const { data: existing, error: existingError } = await admin.from('properties').select('landlord_id').eq('id', id).maybeSingle();
+      if (existingError) return json({ error: existingError.message }, 500);
+      if (!existing) return json({ error: 'Not found' }, 404);
+      if (existing.landlord_id !== user.id) return json({ error: 'Not authorized' }, 403);
+      const { error: deleteError } = await admin.from('properties').delete().eq('id', id);
+      if (deleteError) return json({ error: deleteError.message }, 500);
+      return json({ success: true });
+    }
+
     // ===== TENANCIES =====
     if (path === 'tenancies' && method === 'POST') {
       if (profile?.role !== 'landlord') return json({ error: 'Only landlords can create tenancies' }, 403);
       const body = await request.json();
-      // optional: link tenant by email
+      const tenantEmail = body.tenant_email?.trim().toLowerCase() || null;
       let tenant_id = null;
-      if (body.tenant_email) {
+      if (tenantEmail) {
         const { data: tenantProfile } = await admin
           .from('profiles')
           .select('id')
-          .eq('email', body.tenant_email)
+          .eq('email', tenantEmail)
           .maybeSingle();
         if (tenantProfile) tenant_id = tenantProfile.id;
       }
@@ -844,7 +932,7 @@ async function handle(request, { params }) {
           property_id: body.property_id,
           landlord_id: user.id,
           tenant_id,
-          tenant_email: body.tenant_email || null,
+          tenant_email: tenantEmail,
           start_date: body.start_date || null,
           end_date: body.end_date || null,
           rent_amount: body.rent_amount || null,
@@ -854,7 +942,42 @@ async function handle(request, { params }) {
         .select()
         .single();
       if (error) return json({ error: error.message }, 400);
-      return json({ tenancy: data }, 201);
+      const tenancy = data;
+      let warning = null;
+      if (tenantEmail) {
+        if (resendApiKey) {
+          const inviteLink = `${getAppBaseUrl()}/?inviteEmail=${encodeURIComponent(tenantEmail)}`;
+          try {
+            await sendEmailWithResend({
+              to: tenantEmail,
+              from: resendFromEmail,
+              replyTo: user.email,
+              subject: 'You’ve been invited to HomeProof',
+              text: `${user.email} invited you to HomeProof to manage your tenancy. Click here to accept: ${inviteLink}`,
+              html: `<p><strong>${user.email}</strong> invited you to HomeProof to manage your tenancy.</p><p><a href="${inviteLink}">Accept your invitation</a></p><p>If you already have an account, sign in with this email to view your tenancy.</p>`,
+            });
+          } catch (emailError) {
+            console.error('Failed to send tenancy invite email', emailError);
+            warning = `Tenancy created, but invite email failed to send: ${emailError?.message || emailError}`;
+          }
+        } else {
+          warning = 'Tenancy created, but invite email was not sent because email provider is not configured.';
+        }
+      }
+      return json({ tenancy, warning }, 201);
+    }
+
+    const tenancyMatch = path.match(/^tenancies\/([^/]+)$/);
+    if (tenancyMatch && method === 'DELETE') {
+      if (profile?.role !== 'landlord') return json({ error: 'Only landlords can remove tenants' }, 403);
+      const tenancyId = tenancyMatch[1];
+      const { data: existing, error: existingError } = await admin.from('tenancies').select('landlord_id').eq('id', tenancyId).maybeSingle();
+      if (existingError) return json({ error: existingError.message }, 500);
+      if (!existing) return json({ error: 'Tenancy not found' }, 404);
+      if (existing.landlord_id !== user.id) return json({ error: 'Not authorized' }, 403);
+      const { error: deleteError } = await admin.from('tenancies').delete().eq('id', tenancyId);
+      if (deleteError) return json({ error: deleteError.message }, 500);
+      return json({ success: true });
     }
 
     // ===== PROPERTY LINKS =====
@@ -1625,12 +1748,19 @@ Return STRICT JSON:
       const { data: sub } = await admin.from('user_subscriptions').select('*, subscription_plans(*)').eq('user_id', billingUserId).maybeSingle();
       const plan = sub?.plan_id || 'free';
       const planMeta = sub?.subscription_plans || { ...FREE_PLAN_INFO };
+      const isExpired = sub?.current_period_end ? new Date(sub.current_period_end) < new Date() : false;
+      const hasActiveStatus = ['active', 'trialing'].includes(sub?.status);
+      const effectivePlan = hasActiveStatus && !isExpired ? planMeta : { ...FREE_PLAN_INFO };
       return json({
-        plan,
-        max_properties: planMeta.max_properties,
-        max_ai_runs_per_month: planMeta.max_ai_runs_per_month,
+        plan: effectivePlan.id,
+        plan_id: plan,
+        max_properties: effectivePlan.max_properties,
+        max_ai_runs_per_month: effectivePlan.max_ai_runs_per_month,
         ai_runs_used_this_month: sub?.ai_runs_used_this_month || 0,
         ai_runs_reset_at: sub?.ai_runs_reset_at || new Date().toISOString(),
+        current_period_end: sub?.current_period_end || null,
+        cancel_at_period_end: !!sub?.cancel_at_period_end,
+        status: sub?.status || 'active',
         billing_owner: billingUserId === user.id ? 'self' : 'landlord',
       });
     }
