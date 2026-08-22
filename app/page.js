@@ -429,14 +429,10 @@ function AuthPage({ mode, setMode, onSuccess, onBack, loc }) {
                   <Input id="name" value={name} onChange={(e)=>setName(e.target.value)} required/>
                 </div>
                 <div>
-                  <Label htmlFor="role">{t('iAmA', lang)}</Label>
-                  <Select value={role} onValueChange={setRole}>
-                    <SelectTrigger id="role"><SelectValue/></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="landlord">{t('landlord', lang)}</SelectItem>
-                      <SelectItem value="tenant">{t('tenant', lang)}</SelectItem>
-                    </SelectContent>
-                  </Select>
+                  <Label>{t('landlord', lang)}</Label>
+                  <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                    Create an account to manage your properties. Tenants join through an invitation from their landlord.
+                  </p>
                 </div>
               </>)}
               <div>
@@ -2625,7 +2621,15 @@ function App() {
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session) loadProfile();
-      else setView('landing');
+      else {
+        const inviteEmail = new URLSearchParams(window.location.search).get('inviteEmail');
+        if (inviteEmail) {
+          setAuthMode('signup');
+          setView('auth');
+        } else {
+          setView('landing');
+        }
+      }
     });
     const { data: sub } = supabase.auth.onAuthStateChange((_e, session) => {
       if (session) loadProfile();

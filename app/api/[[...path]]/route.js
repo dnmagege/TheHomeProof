@@ -617,9 +617,17 @@ async function handle(request, { params }) {
     if (path === 'auth/signup' && method === 'POST') {
       const body = await request.json();
       const email = (body?.email || '').trim().toLowerCase();
-      const { password, name, role } = body;
+      const { password, name } = body;
       if (!email || !password) return json({ error: 'email and password required' }, 400);
       const admin = getSupabaseAdmin();
+      const { data: invitation } = await admin
+        .from('tenancies')
+        .select('id')
+        .eq('tenant_email', email)
+        .is('tenant_id', null)
+        .limit(1)
+        .maybeSingle();
+      const role = invitation ? 'tenant' : 'landlord';
       const { data, error } = await admin.auth.admin.createUser({
         email,
         password,
@@ -627,6 +635,17 @@ async function handle(request, { params }) {
         user_metadata: { name: name || '', role: role || 'tenant' },
       });
       if (error) return json({ error: 'Signup failed. Email may already be registered.' }, 400);
+      const { error: profileError } = await admin.from('profiles').upsert({
+        id: data.user.id,
+        email,
+        name: name || '',
+        role,
+      }, { onConflict: 'id' });
+      if (profileError) {
+        await admin.auth.admin.deleteUser(data.user.id);
+        console.error('Profile creation failed during signup', profileError);
+        return json({ error: 'Signup failed. Please try again.' }, 500);
+      }
       try {
         await admin
           .from('tenancies')
